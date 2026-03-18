@@ -29,7 +29,7 @@ export const useChartsStore = defineStore("charts", () => {
     trained_on: "all_history",
     confidence_level: 0.8,
     accuracy_threshold: 0.4,
-    selection_strategy: "lowest_wape_then_rmse",
+    selection_strategy: "lowest_wape_then_rmse_with_weighted_blend",
     validation_wape: null,
     validation_rmse: null,
     baseline_wape: null,

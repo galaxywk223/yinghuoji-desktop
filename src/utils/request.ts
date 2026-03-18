@@ -52,20 +52,6 @@ function normalizeItems(data: Record<string, any> = {}) {
   return Object.entries(data).map(([key, value]) => ({ key, value }));
 }
 
-function synthesizeForecastStatus() {
-  return {
-    success: true,
-    data: {
-      status: "unavailable",
-      signature: null,
-      message: "桌面端当前版本未启用本地趋势预测",
-      updated_at: null,
-      trained_for_date: null,
-      forecasts: null,
-    },
-  };
-}
-
 export function extractRequestErrorMessage(error: any) {
   const candidates = [
     error?.response?.data?.message,
@@ -250,10 +236,10 @@ async function baseRequest(config: RequestConfig) {
       return await invoke("charts_stages");
     }
     if (url === "/api/charts/overview_forecast" && method === "get") {
-      return synthesizeForecastStatus();
+      return await invoke("charts_overview_forecast_status");
     }
     if (url === "/api/charts/overview_forecast/retrain" && method === "post") {
-      return synthesizeForecastStatus();
+      return await invoke("charts_overview_forecast_retrain");
     }
 
     if (url === "/api/countdowns" && method === "get") {

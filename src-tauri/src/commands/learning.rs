@@ -15,9 +15,13 @@ use crate::models::{
 use crate::{AppResult, AppState};
 
 use super::common::{
-    active_stage_id, categories_json, connection, ensure_stage_exists, invalid, labels_for_daily,
+    active_stage_id, categories_json, connection, ensure_stage_exists, invalid,
     moving_average_points, record_json_by_id, stage_json_by_id, stages_json,
     subcategory_json_by_id,
+};
+use super::forecast::{
+    attach_forecast_bundle, build_unavailable_forecast_bundle, resolve_forecast_entry,
+    TrendForecastRequest,
 };
 
 fn labels_for_weekly(
@@ -1066,63 +1070,523 @@ fn category_chart_data_efficiency(
     })))
 }
 
+#[derive(Clone)]
+struct OverviewDataset {
+    labels: Vec<String>,
+    actuals: Vec<f64>,
+    training_labels: Vec<String>,
+    training_actuals: Vec<Option<f64>>,
+    training_stage_features: Vec<Vec<f64>>,
+    future_stage_features: Vec<Vec<f64>>,
+    ongoing: bool,
+    ongoing_label: Option<String>,
+    ongoing_value: Option<f64>,
+}
+
+#[derive(Clone)]
+struct OverviewContext {
+    global_start_date: NaiveDate,
+    last_log_date: NaiveDate,
+    kpis: Value,
+    stage_annotations: Vec<Value>,
+    daily_duration: OverviewDataset,
+    daily_efficiency: OverviewDataset,
+    weekly_duration: OverviewDataset,
+    weekly_efficiency: OverviewDataset,
+}
+
+fn week_start(day: NaiveDate) -> NaiveDate {
+    day - Duration::days(day.weekday().num_days_from_monday() as i64)
+}
+
+fn is_incomplete_daily_bucket(bucket_date: NaiveDate, today: NaiveDate) -> bool {
+    bucket_date == today
+}
+
+fn is_incomplete_weekly_bucket(bucket_start: NaiveDate, bucket_end: NaiveDate, today: NaiveDate) -> bool {
+    bucket_start <= today && today <= bucket_end && today < bucket_end
+}
+
+fn resolve_stage_snapshot(stages: &[(i64, String, NaiveDate)], target_date: NaiveDate) -> Vec<f64> {
+    let mut current_index = 0usize;
+    for (index, (_, _, start_date)) in stages.iter().enumerate() {
+        if *start_date <= target_date {
+            current_index = index;
+        } else {
+            break;
+        }
+    }
+    let current_stage = &stages[current_index];
+    let stage_age_days = (target_date - current_stage.2).num_days().max(0) as f64;
+    let stage_index_norm = if stages.len() > 1 {
+        current_index as f64 / (stages.len() - 1) as f64
+    } else {
+        0.0
+    };
+    let stage_start_flag = if target_date == current_stage.2 { 1.0 } else { 0.0 };
+    vec![
+        (stage_age_days * 100.0).round() / 100.0,
+        (stage_index_norm * 10000.0).round() / 10000.0,
+        stage_start_flag,
+    ]
+}
+
+fn forecast_signature(context: &OverviewContext) -> String {
+    let payload = json!({
+        "global_start_date": context.global_start_date.format("%Y-%m-%d").to_string(),
+        "last_log_date": context.last_log_date.format("%Y-%m-%d").to_string(),
+        "daily_duration_data": {
+            "training_labels": context.daily_duration.training_labels,
+            "training_actuals": context.daily_duration.training_actuals,
+            "training_stage_features": context.daily_duration.training_stage_features,
+            "future_stage_features": context.daily_duration.future_stage_features,
+            "ongoing_label": context.daily_duration.ongoing_label,
+            "ongoing_value": context.daily_duration.ongoing_value,
+            "ongoing": context.daily_duration.ongoing,
+        },
+        "daily_efficiency_data": {
+            "training_labels": context.daily_efficiency.training_labels,
+            "training_actuals": context.daily_efficiency.training_actuals,
+            "training_stage_features": context.daily_efficiency.training_stage_features,
+            "future_stage_features": context.daily_efficiency.future_stage_features,
+            "ongoing_label": context.daily_efficiency.ongoing_label,
+            "ongoing_value": context.daily_efficiency.ongoing_value,
+            "ongoing": context.daily_efficiency.ongoing,
+        },
+        "weekly_duration_data": {
+            "training_labels": context.weekly_duration.training_labels,
+            "training_actuals": context.weekly_duration.training_actuals,
+            "training_stage_features": context.weekly_duration.training_stage_features,
+            "future_stage_features": context.weekly_duration.future_stage_features,
+            "ongoing_label": context.weekly_duration.ongoing_label,
+            "ongoing_value": context.weekly_duration.ongoing_value,
+            "ongoing": context.weekly_duration.ongoing,
+        },
+        "weekly_efficiency_data": {
+            "training_labels": context.weekly_efficiency.training_labels,
+            "training_actuals": context.weekly_efficiency.training_actuals,
+            "training_stage_features": context.weekly_efficiency.training_stage_features,
+            "future_stage_features": context.weekly_efficiency.future_stage_features,
+            "ongoing_label": context.weekly_efficiency.ongoing_label,
+            "ongoing_value": context.weekly_efficiency.ongoing_value,
+            "ongoing": context.weekly_efficiency.ongoing,
+        },
+    });
+    let digest = payload.to_string();
+    let mut hash = 1469598103934665603u64;
+    for byte in digest.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(1099511628211u64);
+    }
+    format!("{hash:016x}")
+}
+
+fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<OverviewContext>> {
+    let mut stage_stmt = conn.prepare("SELECT id, name, start_date FROM stage ORDER BY start_date ASC")?;
+    let stages = stage_stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                db::parse_date(&row.get::<_, String>(2)?).map_err(|_| rusqlite::Error::InvalidQuery)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if stages.is_empty() {
+        return Ok(None);
+    }
+
+    let mut log_stmt = conn.prepare("SELECT log_date FROM log_entry ORDER BY log_date ASC")?;
+    let log_dates = log_stmt
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if log_dates.is_empty() {
+        return Ok(None);
+    }
+
+    let first_log_date = db::parse_date(&log_dates[0])?;
+    let last_log_date = db::parse_date(log_dates.last().map(String::as_str).unwrap_or(""))?;
+    let global_start_date = stages[0].2;
+    let today = Local::now().date_naive();
+    let date_range = (0..=(last_log_date - first_log_date).num_days())
+        .map(|offset| first_log_date + Duration::days(offset))
+        .collect::<Vec<_>>();
+
+    let mut duration_stmt =
+        conn.prepare("SELECT log_date, SUM(COALESCE(actual_duration, 0)) FROM log_entry GROUP BY log_date")?;
+    let duration_rows = duration_stmt
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let daily_duration_map = duration_rows.into_iter().collect::<HashMap<_, _>>();
+
+    let mut eff_stmt = conn.prepare("SELECT log_date, efficiency FROM daily_data ORDER BY log_date ASC")?;
+    let eff_rows = eff_stmt
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let daily_efficiency_map = eff_rows.into_iter().collect::<HashMap<_, _>>();
+
+    let daily_labels = date_range
+        .iter()
+        .map(|day| day.format("%Y-%m-%d").to_string())
+        .collect::<Vec<_>>();
+    let daily_duration_actuals = date_range
+        .iter()
+        .map(|day| {
+            let key = day.format("%Y-%m-%d").to_string();
+            ((daily_duration_map.get(&key).copied().unwrap_or(0) as f64 / 60.0) * 100.0).round() / 100.0
+        })
+        .collect::<Vec<_>>();
+    let daily_efficiency_optional = date_range
+        .iter()
+        .map(|day| daily_efficiency_map.get(&day.format("%Y-%m-%d").to_string()).copied())
+        .collect::<Vec<_>>();
+    let daily_efficiency_actuals = daily_efficiency_optional
+        .iter()
+        .map(|value| value.unwrap_or(0.0))
+        .collect::<Vec<_>>();
+    let daily_stage_features = date_range
+        .iter()
+        .map(|day| resolve_stage_snapshot(&stages, *day))
+        .collect::<Vec<_>>();
+
+    let daily_incomplete = date_range
+        .last()
+        .copied()
+        .map(|day| is_incomplete_daily_bucket(day, today))
+        .unwrap_or(false);
+    let daily_train_len = if daily_incomplete {
+        daily_labels.len().saturating_sub(1)
+    } else {
+        daily_labels.len()
+    };
+    let daily_future_start = if daily_incomplete {
+        *date_range.last().unwrap_or(&last_log_date)
+    } else {
+        last_log_date + Duration::days(1)
+    };
+    let daily_future_stage_features = (0..14)
+        .map(|offset| resolve_stage_snapshot(&stages, daily_future_start + Duration::days(offset as i64)))
+        .collect::<Vec<_>>();
+
+    #[derive(Default)]
+    struct WeeklyAgg {
+        duration_hours_total: f64,
+        efficiency_total: f64,
+        days: usize,
+        stage_rows: Vec<Vec<f64>>,
+        anchor_day: Option<NaiveDate>,
+    }
+
+    let mut weekly_map = BTreeMap::<(i32, i32), WeeklyAgg>::new();
+    for (index, day) in date_range.iter().enumerate() {
+        let (_, _, year, week_num) = db::get_custom_week_window(*day, global_start_date);
+        let entry = weekly_map.entry((year, week_num)).or_default();
+        entry.duration_hours_total += daily_duration_actuals.get(index).copied().unwrap_or(0.0);
+        entry.efficiency_total += daily_efficiency_optional.get(index).and_then(|value| *value).unwrap_or(0.0);
+        entry.days += 1;
+        entry.stage_rows.push(daily_stage_features.get(index).cloned().unwrap_or_default());
+        if entry.anchor_day.is_none() {
+            entry.anchor_day = Some(*day);
+        }
+    }
+
+    let mut weekly_labels = Vec::new();
+    let mut weekly_duration_actuals = Vec::new();
+    let mut weekly_duration_totals = Vec::new();
+    let mut weekly_efficiency_actuals = Vec::new();
+    let mut weekly_stage_features = Vec::new();
+    let mut weekly_anchor_days = Vec::new();
+    for ((year, week_num), agg) in &weekly_map {
+        let anchor = agg.anchor_day.unwrap_or(last_log_date);
+        let bucket_start = week_start(anchor);
+        let bucket_end = bucket_start + Duration::days(6);
+        let elapsed_days = if is_incomplete_weekly_bucket(bucket_start, bucket_end, today) {
+            (today - bucket_start).num_days() + 1
+        } else {
+            agg.days as i64
+        }
+        .clamp(1, 7) as f64;
+        weekly_labels.push(format!("{year}-W{week_num:02}"));
+        weekly_duration_actuals.push((agg.duration_hours_total / elapsed_days * 100.0).round() / 100.0);
+        weekly_duration_totals.push((agg.duration_hours_total * 100.0).round() / 100.0);
+        weekly_efficiency_actuals.push((agg.efficiency_total / elapsed_days * 100.0).round() / 100.0);
+        let avg_stage_age_days = agg.stage_rows.iter().map(|row| row.first().copied().unwrap_or(0.0)).sum::<f64>()
+            / agg.stage_rows.len().max(1) as f64;
+        let avg_stage_index = agg.stage_rows.iter().map(|row| row.get(1).copied().unwrap_or(0.0)).sum::<f64>()
+            / agg.stage_rows.len().max(1) as f64;
+        let stage_reset_flag = agg.stage_rows.iter().map(|row| row.get(2).copied().unwrap_or(0.0)).fold(0.0, f64::max);
+        weekly_stage_features.push(vec![
+            ((avg_stage_age_days / 7.0) * 100.0).round() / 100.0,
+            (avg_stage_index * 10000.0).round() / 10000.0,
+            stage_reset_flag,
+        ]);
+        weekly_anchor_days.push(anchor);
+    }
+
+    let weekly_incomplete = weekly_anchor_days
+        .last()
+        .copied()
+        .map(|anchor| is_incomplete_weekly_bucket(week_start(anchor), week_start(anchor) + Duration::days(6), today))
+        .unwrap_or(false);
+    let weekly_train_len = if weekly_incomplete {
+        weekly_labels.len().saturating_sub(1)
+    } else {
+        weekly_labels.len()
+    };
+    let weekly_reference_date = if weekly_incomplete { today } else { last_log_date + Duration::days(7) };
+    let weekly_future_stage_features = (0..8)
+        .map(|offset| {
+            let snapshot = resolve_stage_snapshot(&stages, weekly_reference_date + Duration::days((offset * 7) as i64));
+            vec![
+                ((snapshot.first().copied().unwrap_or(0.0) / 7.0) * 100.0).round() / 100.0,
+                snapshot.get(1).copied().unwrap_or(0.0),
+                snapshot.get(2).copied().unwrap_or(0.0),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    let avg_daily_minutes = if daily_duration_actuals.is_empty() {
+        0
+    } else {
+        ((daily_duration_actuals.iter().sum::<f64>() / daily_duration_actuals.len() as f64) * 60.0).round() as i64
+    };
+    let efficiency_star = if daily_efficiency_actuals.is_empty() {
+        Value::String("--".to_string())
+    } else {
+        json!((daily_efficiency_actuals.iter().sum::<f64>() / daily_efficiency_actuals.len() as f64 * 100.0).round() / 100.0)
+    };
+
+    Ok(Some(OverviewContext {
+        global_start_date,
+        last_log_date,
+        kpis: json!({
+            "avg_daily_minutes": avg_daily_minutes,
+            "avg_daily_formatted": db::format_minutes(avg_daily_minutes),
+            "efficiency_star": efficiency_star,
+            "weekly_trend": weekly_duration_actuals.last().copied().unwrap_or(0.0),
+        }),
+        stage_annotations: prepare_stage_annotations(conn)?,
+        daily_duration: OverviewDataset {
+            labels: daily_labels.clone(),
+            actuals: daily_duration_actuals.clone(),
+            training_labels: daily_labels[..daily_train_len].to_vec(),
+            training_actuals: daily_duration_actuals[..daily_train_len].iter().copied().map(Some).collect(),
+            training_stage_features: daily_stage_features[..daily_train_len].to_vec(),
+            future_stage_features: daily_future_stage_features,
+            ongoing: daily_incomplete,
+            ongoing_label: daily_incomplete.then(|| daily_labels.last().cloned()).flatten(),
+            ongoing_value: daily_incomplete.then(|| daily_duration_actuals.last().copied()).flatten(),
+        },
+        daily_efficiency: OverviewDataset {
+            labels: daily_labels.clone(),
+            actuals: daily_efficiency_actuals.clone(),
+            training_labels: daily_labels[..daily_train_len].to_vec(),
+            training_actuals: daily_efficiency_optional[..daily_train_len].to_vec(),
+            training_stage_features: daily_stage_features[..daily_train_len].to_vec(),
+            future_stage_features: (0..14)
+                .map(|offset| resolve_stage_snapshot(&stages, daily_future_start + Duration::days(offset as i64)))
+                .collect(),
+            ongoing: daily_incomplete,
+            ongoing_label: daily_incomplete.then(|| daily_labels.last().cloned()).flatten(),
+            ongoing_value: daily_incomplete.then(|| daily_efficiency_optional.last().and_then(|value| *value)).flatten(),
+        },
+        weekly_duration: OverviewDataset {
+            labels: weekly_labels.clone(),
+            actuals: weekly_duration_actuals.clone(),
+            training_labels: weekly_labels[..weekly_train_len].to_vec(),
+            training_actuals: weekly_duration_totals[..weekly_train_len].iter().copied().map(Some).collect(),
+            training_stage_features: weekly_stage_features[..weekly_train_len].to_vec(),
+            future_stage_features: weekly_future_stage_features.clone(),
+            ongoing: weekly_incomplete,
+            ongoing_label: weekly_incomplete.then(|| weekly_labels.last().cloned()).flatten(),
+            ongoing_value: weekly_incomplete.then(|| weekly_duration_actuals.last().copied()).flatten(),
+        },
+        weekly_efficiency: OverviewDataset {
+            labels: weekly_labels.clone(),
+            actuals: weekly_efficiency_actuals.clone(),
+            training_labels: weekly_labels[..weekly_train_len].to_vec(),
+            training_actuals: weekly_efficiency_actuals[..weekly_train_len].iter().copied().map(Some).collect(),
+            training_stage_features: weekly_stage_features[..weekly_train_len].to_vec(),
+            future_stage_features: weekly_future_stage_features,
+            ongoing: weekly_incomplete,
+            ongoing_label: weekly_incomplete.then(|| weekly_labels.last().cloned()).flatten(),
+            ongoing_value: weekly_incomplete.then(|| weekly_efficiency_actuals.last().copied()).flatten(),
+        },
+    }))
+}
+
+fn build_overview_forecast_request(context: &OverviewContext) -> TrendForecastRequest {
+    TrendForecastRequest {
+        daily_labels: context.daily_duration.training_labels.clone(),
+        daily_duration_values: context.daily_duration.training_actuals.clone(),
+        daily_efficiency_values: context.daily_efficiency.training_actuals.clone(),
+        daily_stage_features: context.daily_duration.training_stage_features.clone(),
+        daily_future_stage_features: context.daily_duration.future_stage_features.clone(),
+        weekly_labels: context.weekly_duration.training_labels.clone(),
+        weekly_duration_values: context.weekly_duration.training_actuals.clone(),
+        weekly_efficiency_values: context.weekly_efficiency.training_actuals.clone(),
+        weekly_stage_features: context.weekly_duration.training_stage_features.clone(),
+        weekly_future_stage_features: context.weekly_duration.future_stage_features.clone(),
+        global_start_date: context.global_start_date,
+        last_log_date: context.last_log_date,
+        daily_current_label: context.daily_duration.ongoing_label.clone(),
+        weekly_current_label: context.weekly_duration.ongoing_label.clone(),
+        weekly_duration_display_divisor: 7.0,
+    }
+}
+
+fn build_overview_payload(
+    conn: &rusqlite::Connection,
+    app_state: &AppState,
+    force_sync_forecasts: bool,
+    force_retrain_forecasts: bool,
+) -> Result<Value> {
+    let Some(context) = build_overview_context(conn)? else {
+        return Ok(json!({
+            "has_data": false,
+            "kpis": {
+                "avg_daily_minutes": 0,
+                "avg_daily_formatted": "--",
+                "efficiency_star": "--",
+                "weekly_trend": "--"
+            },
+            "stage_annotations": [],
+            "forecast_status": {
+                "state": "unavailable",
+                "signature": Value::Null,
+                "message": "暂无可用于预测的历史数据",
+                "updated_at": Value::Null,
+                "trained_for_date": Value::Null
+            }
+        }));
+    };
+
+    let signature = forecast_signature(&context);
+    let forecast_entry = resolve_forecast_entry(
+        app_state,
+        &signature,
+        build_overview_forecast_request(&context),
+        force_sync_forecasts,
+        force_retrain_forecasts,
+    )?;
+    let mut payload = json!({
+        "has_data": true,
+        "kpis": context.kpis,
+        "weekly_duration_data": {
+            "labels": context.weekly_duration.labels,
+            "actuals": context.weekly_duration.actuals,
+            "trends": moving_average_points(&context.weekly_duration.actuals),
+            "ongoing": context.weekly_duration.ongoing,
+            "ongoing_label": context.weekly_duration.ongoing_label,
+            "ongoing_value": context.weekly_duration.ongoing_value
+        },
+        "weekly_efficiency_data": {
+            "labels": context.weekly_efficiency.labels,
+            "actuals": context.weekly_efficiency.actuals,
+            "trends": moving_average_points(&context.weekly_efficiency.actuals),
+            "ongoing": context.weekly_efficiency.ongoing,
+            "ongoing_label": context.weekly_efficiency.ongoing_label,
+            "ongoing_value": context.weekly_efficiency.ongoing_value
+        },
+        "daily_duration_data": {
+            "labels": context.daily_duration.labels,
+            "actuals": context.daily_duration.actuals,
+            "trends": moving_average_points(&context.daily_duration.actuals),
+            "ongoing": context.daily_duration.ongoing,
+            "ongoing_label": context.daily_duration.ongoing_label,
+            "ongoing_value": context.daily_duration.ongoing_value
+        },
+        "daily_efficiency_data": {
+            "labels": context.daily_efficiency.labels,
+            "actuals": context.daily_efficiency.actuals,
+            "trends": moving_average_points(&context.daily_efficiency.actuals),
+            "ongoing": context.daily_efficiency.ongoing,
+            "ongoing_label": context.daily_efficiency.ongoing_label,
+            "ongoing_value": context.daily_efficiency.ongoing_value
+        },
+        "stage_annotations": context.stage_annotations,
+        "forecast_status": {
+            "state": forecast_entry["state"].clone(),
+            "signature": signature,
+            "message": forecast_entry["message"].clone(),
+            "updated_at": forecast_entry["updated_at"].clone(),
+            "trained_for_date": forecast_entry["trained_for_date"].clone()
+        }
+    });
+    let forecast_bundle = forecast_entry
+        .get("forecast_bundle")
+        .cloned()
+        .unwrap_or_else(|| build_unavailable_forecast_bundle(""));
+    attach_forecast_bundle(&mut payload, &forecast_bundle);
+    Ok(payload)
+}
+
 #[tauri::command]
 pub fn charts_overview(state: State<'_, AppState>, query: ChartsOverviewQuery) -> AppResult<Value> {
     let conn = connection(&state)?;
     let _ = (&query.view, &query.stage_id);
-    let (weekly_labels, weekly_duration, weekly_efficiency) = labels_for_weekly(&conn, None)?;
-    let (daily_labels, daily_duration, daily_efficiency) = labels_for_daily(&conn, None)?;
-    let avg_daily_minutes = if daily_duration.is_empty() {
-        0
-    } else {
-        ((daily_duration.iter().sum::<f64>() / daily_duration.len() as f64) * 60.0).round() as i64
-    };
+    Ok(build_overview_payload(&conn, &state, false, false)?)
+}
+
+#[tauri::command]
+pub fn charts_overview_forecast_status(state: State<'_, AppState>) -> AppResult<Value> {
+    let conn = connection(&state)?;
+    let payload = build_overview_payload(&conn, &state, false, false)?;
+    if !payload["has_data"].as_bool().unwrap_or(false) {
+        return Ok(json!({
+            "status": "unavailable",
+            "signature": Value::Null,
+            "message": "暂无可用于预测的历史数据",
+            "updated_at": Value::Null,
+            "trained_for_date": Value::Null,
+            "forecasts": build_unavailable_forecast_bundle(""),
+        }));
+    }
     Ok(json!({
-        "has_data": !weekly_labels.is_empty() || !daily_labels.is_empty(),
-        "kpis": {
-            "avg_daily_minutes": avg_daily_minutes,
-            "avg_daily_formatted": db::format_minutes(avg_daily_minutes),
-            "efficiency_star": if daily_efficiency.is_empty() { Value::String("--".to_string()) } else { json!((daily_efficiency.iter().sum::<f64>() / daily_efficiency.len() as f64 * 100.0).round() / 100.0) },
-            "weekly_trend": weekly_duration.last().copied().unwrap_or(0.0)
+        "status": payload["forecast_status"]["state"].clone(),
+        "signature": payload["forecast_status"]["signature"].clone(),
+        "message": payload["forecast_status"]["message"].clone(),
+        "updated_at": payload["forecast_status"]["updated_at"].clone(),
+        "trained_for_date": payload["forecast_status"]["trained_for_date"].clone(),
+        "forecasts": {
+            "daily_duration_data": payload["daily_duration_data"]["forecast"].clone(),
+            "daily_efficiency_data": payload["daily_efficiency_data"]["forecast"].clone(),
+            "weekly_duration_data": payload["weekly_duration_data"]["forecast"].clone(),
+            "weekly_efficiency_data": payload["weekly_efficiency_data"]["forecast"].clone()
+        }
+    }))
+}
+
+#[tauri::command]
+pub fn charts_overview_forecast_retrain(state: State<'_, AppState>) -> AppResult<Value> {
+    let conn = connection(&state)?;
+    let payload = build_overview_payload(&conn, &state, false, true)?;
+    if !payload["has_data"].as_bool().unwrap_or(false) {
+        return Ok(json!({
+            "status": "unavailable",
+            "signature": Value::Null,
+            "message": "暂无可用于预测的历史数据",
+            "updated_at": Value::Null,
+            "trained_for_date": Value::Null,
+            "forecasts": build_unavailable_forecast_bundle(""),
+        }));
+    }
+    Ok(json!({
+        "status": payload["forecast_status"]["state"].clone(),
+        "signature": payload["forecast_status"]["signature"].clone(),
+        "message": if payload["forecast_status"]["state"].as_str() == Some("pending") {
+            Value::String("已开始重新训练预测模型".to_string())
+        } else {
+            payload["forecast_status"]["message"].clone()
         },
-        "weekly_duration_data": {
-            "labels": weekly_labels,
-            "actuals": weekly_duration,
-            "trends": moving_average_points(&weekly_duration),
-            "ongoing": false,
-            "ongoing_label": Value::Null,
-            "ongoing_value": Value::Null,
-            "forecast": { "available": false, "status": "unavailable", "reason": "桌面端当前版本未启用本地趋势预测", "labels": [], "prediction": [], "lower": [], "upper": [] }
-        },
-        "weekly_efficiency_data": {
-            "labels": weekly_labels,
-            "actuals": weekly_efficiency,
-            "trends": moving_average_points(&weekly_efficiency),
-            "ongoing": false,
-            "ongoing_label": Value::Null,
-            "ongoing_value": Value::Null,
-            "forecast": { "available": false, "status": "unavailable", "reason": "桌面端当前版本未启用本地趋势预测", "labels": [], "prediction": [], "lower": [], "upper": [] }
-        },
-        "daily_duration_data": {
-            "labels": daily_labels,
-            "actuals": daily_duration,
-            "trends": moving_average_points(&daily_duration),
-            "ongoing": false,
-            "ongoing_label": Value::Null,
-            "ongoing_value": Value::Null,
-            "forecast": { "available": false, "status": "unavailable", "reason": "桌面端当前版本未启用本地趋势预测", "labels": [], "prediction": [], "lower": [], "upper": [] }
-        },
-        "daily_efficiency_data": {
-            "labels": daily_labels,
-            "actuals": daily_efficiency,
-            "trends": moving_average_points(&daily_efficiency),
-            "ongoing": false,
-            "ongoing_label": Value::Null,
-            "ongoing_value": Value::Null,
-            "forecast": { "available": false, "status": "unavailable", "reason": "桌面端当前版本未启用本地趋势预测", "labels": [], "prediction": [], "lower": [], "upper": [] }
-        },
-        "stage_annotations": prepare_stage_annotations(&conn)?,
-        "forecast_status": { "state": "unavailable", "signature": Value::Null, "message": "桌面端当前版本未启用本地趋势预测", "updated_at": Value::Null, "trained_for_date": Value::Null }
+        "updated_at": payload["forecast_status"]["updated_at"].clone(),
+        "trained_for_date": payload["forecast_status"]["trained_for_date"].clone(),
+        "forecasts": {
+            "daily_duration_data": payload["daily_duration_data"]["forecast"].clone(),
+            "daily_efficiency_data": payload["daily_efficiency_data"]["forecast"].clone(),
+            "weekly_duration_data": payload["weekly_duration_data"]["forecast"].clone(),
+            "weekly_efficiency_data": payload["weekly_efficiency_data"]["forecast"].clone()
+        }
     }))
 }
 

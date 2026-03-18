@@ -210,7 +210,8 @@ const normalizeForecast = (forecast) => ({
   trainedOn: forecast?.trained_on || "all_history",
   confidenceLevel: Number(forecast?.confidence_level || 0.8),
   accuracyThreshold: Number(forecast?.accuracy_threshold || 0.4),
-  selectionStrategy: forecast?.selection_strategy || "lowest_wape_then_rmse",
+  selectionStrategy:
+    forecast?.selection_strategy || "lowest_wape_then_rmse_with_weighted_blend",
   validationWape:
     forecast?.validation_wape == null
       ? null

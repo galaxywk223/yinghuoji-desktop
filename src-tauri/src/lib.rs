@@ -127,6 +127,8 @@ pub fn run() {
             commands::record_statistics,
             commands::dashboard_summary,
             commands::charts_overview,
+            commands::charts_overview_forecast_status,
+            commands::charts_overview_forecast_retrain,
             commands::charts_categories,
             commands::charts_category_trend,
             commands::charts_stages,
