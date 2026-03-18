@@ -1,0 +1,106 @@
+// 按钮组与主按钮
+:deep(.el-button-group) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+:deep(.el-button-group .el-button) {
+  border: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 10px 18px;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+:deep(.el-button-group .el-button--primary) {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: #fff;
+}
+
+:deep(.el-button-group .el-button:not(.el-button--primary)) {
+  background: var(--surface-card);
+  color: var(--color-text-secondary);
+}
+
+:deep(.el-button-group .el-button:not(.el-button--primary)):hover {
+  background: var(--color-bg-hover);
+  color: var(--color-primary);
+}
+
+:deep(.page-header-records .el-button--primary) {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  border: none;
+  padding: 12px 24px;
+  font-size: 1rem;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: var(--box-shadow-hover);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+:deep(.page-header-records .el-button--primary):hover {
+  transform: translateY(-2px);
+  box-shadow: var(--box-shadow-hover);
+}
+
+:deep(.page-header-records .el-button--primary .el-icon) {
+  font-size: 1.2rem;
+  color: #fff !important;
+}
+
+/* 表格操作按钮 */
+:deep(.action-btn) {
+  padding: 6px !important;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  margin: 0 2px;
+
+  svg {
+    width: 16px !important;
+    height: 16px !important;
+    transition: transform 0.2s ease;
+  }
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+
+    svg {
+      transform: scale(1.15);
+    }
+  }
+
+  &.el-button--danger:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: var(--color-error);
+  }
+}
+
+/* 浮动操作按钮 FAB */
+.fab-add {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: #fff;
+  box-shadow: var(--box-shadow-hover);
+  
+  &:hover {
+    box-shadow: var(--box-shadow-hover);
+  }
+}
+
+.fab-sort {
+  background: var(--surface-card);
+  color: var(--color-text-base);
+  box-shadow: var(--box-shadow);
+  
+  &:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-primary);
+  }
+}

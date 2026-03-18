@@ -1,0 +1,14 @@
+// 笔记样式
+.log-notes-row {
+  background-color: var(--surface-subtle);
+}
+
+.log-notes-cell {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  border-top: 0 !important;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  white-space: normal;
+  background-color: transparent;
+}

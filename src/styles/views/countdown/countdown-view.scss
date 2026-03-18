@@ -1,0 +1,324 @@
+/* 倒计时视图主样式 - iOS Premium */
+.countdown-page {
+  min-height: 100%;
+}
+
+.countdown-add-desktop {
+  display: inline-flex;
+}
+
+/* 分区标题 */
+/* 卡片网格布局 */
+.row-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+/* 空状态 */
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 64px 24px;
+  background: var(--surface-card-muted);
+  border: 2px dashed var(--stroke-soft);
+  border-radius: 24px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--color-primary);
+    background: var(--surface-card);
+  }
+}
+
+.empty-state .ll-icon {
+  font-size: 64px;
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  margin: 16px 0 12px;
+  font-size: 20px;
+  color: var(--color-text-heading);
+  font-weight: 700;
+}
+
+.text-muted {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.text-center {
+  text-align: center;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .row-cards {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .countdown-add-desktop {
+    display: none;
+  }
+}
+
+/* 骨架屏样式优化 */
+.countdown-page :deep(.el-skeleton) {
+  background: var(--surface-card);
+  padding: 24px;
+  border-radius: 24px;
+  box-shadow: var(--box-shadow-card);
+}
+
+/* 对话框与表单（美化尺寸与间距） */
+.countdown-page :deep(.el-dialog) {
+  border-radius: 24px;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--box-shadow-hover);
+}
+
+.countdown-page :deep(.el-dialog__header) {
+  padding: 24px 24px 0 24px;
+  margin-right: 0;
+}
+
+.countdown-page :deep(.el-dialog__title) {
+  font-weight: 700;
+  color: var(--color-text-heading);
+  font-size: 20px;
+}
+
+.countdown-page :deep(.el-dialog__body) {
+  padding: 24px;
+}
+
+.countdown-page :deep(.countdown-form) {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  .el-form-item {
+    margin-bottom: 16px;
+    align-items: flex-start;
+  }
+
+  .el-form-item__label {
+    font-weight: 600;
+    color: var(--color-text-heading);
+    margin-bottom: 8px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    font-size: 15px;
+  }
+
+  .el-form-item__content {
+    width: 100%;
+  }
+
+  .el-row {
+    width: 100%;
+  }
+
+  /* 输入框统一高度与样式 */
+  .el-input__wrapper,
+  .el-select .el-input__wrapper,
+  .el-date-editor .el-input__wrapper,
+  .el-time-picker .el-input__wrapper {
+    background: var(--surface-card-muted);
+    border: none;
+    border-radius: 12px;
+    box-shadow: none;
+    min-height: 52px;
+    height: 52px;
+    padding: 0 16px;
+    transition: all 0.2s ease;
+  }
+
+  .el-input__inner {
+    line-height: 52px;
+    font-size: 17px;
+    color: var(--color-text-heading);
+    font-weight: 500;
+  }
+
+  .el-date-editor .el-input__wrapper,
+  .el-time-picker .el-input__wrapper {
+    column-gap: 12px;
+  }
+
+  .el-input__wrapper.is-focus,
+  .el-select .el-input__wrapper.is-focus,
+  .el-date-editor.is-active .el-input__wrapper,
+  .el-time-picker.is-active .el-input__wrapper {
+    background: var(--surface-card);
+    box-shadow: 0 0 0 2px var(--color-primary);
+  }
+}
+
+.countdown-collapse {
+  background: transparent;
+  border: none;
+
+  :deep(.el-collapse-item__header) {
+    background: transparent;
+    border-bottom: none;
+    padding: 0 8px;
+    margin-bottom: 16px;
+  }
+
+  :deep(.el-collapse-item__wrap) {
+    background: transparent;
+    border: none;
+  }
+
+  :deep(.el-collapse-item__content) {
+    padding-bottom: 0;
+  }
+}
+
+.collapse-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+  font-size: 18px;
+
+  .badge {
+    min-width: 32px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--surface-soft);
+    color: var(--color-text-heading);
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+
+    &.muted {
+      background: var(--surface-card-muted);
+      color: var(--color-text-secondary);
+    }
+  }
+}
+
+.fab-add {
+  position: fixed;
+  right: clamp(24px, 4vw, 48px);
+  bottom: clamp(24px, 4vw, 48px);
+  width: 64px;
+  height: 64px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary),
+    var(--color-primary-dark)
+  );
+  color: var(--color-text-inverse);
+  box-shadow: var(--box-shadow-hover);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+  z-index: 1200;
+}
+
+.fab-add:hover {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: var(--box-shadow-hover);
+}
+
+.fab-icon {
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+
+/* 日期/时间输入：默认宽一些，图标与文本间距更宽松 */
+.countdown-page :deep(.el-date-editor) {
+  width: 100%;
+}
+
+.countdown-page :deep(.el-time-picker) {
+  width: 100%;
+}
+
+.countdown-page :deep(.el-dialog__footer) {
+  padding: 16px 24px 24px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+
+  .el-button {
+    min-width: 120px;
+    height: 48px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    border: none;
+    font-size: 16px;
+  }
+
+  .el-button:not(.el-button--primary) {
+    background: var(--surface-card-muted);
+    color: var(--color-text-heading);
+
+    &:hover {
+      background: var(--surface-soft);
+    }
+  }
+
+  .el-button--primary {
+    background: var(--color-primary);
+    border: none;
+    color: var(--color-text-inverse);
+    box-shadow: var(--box-shadow);
+
+    &:hover {
+      background: var(--color-primary-dark);
+      transform: translateY(-1px);
+      box-shadow: var(--box-shadow-hover);
+    }
+  }
+}
+
+@media (max-width: 600px) {
+  .fab-add {
+    display: inline-flex;
+  }
+
+  .countdown-page :deep(.el-date-editor),
+  .countdown-page :deep(.el-time-picker) {
+    width: 100%;
+  }
+}
+
+@media (min-width: 601px) {
+  .fab-add {
+    display: none;
+  }
+}

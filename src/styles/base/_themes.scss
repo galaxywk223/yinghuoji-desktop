@@ -1,0 +1,274 @@
+:root {
+  --font-family-base:
+    "Inter", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-family-heading:
+    "Inter", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 30px;
+  --radius-pill: 999px;
+
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+
+  --sidebar-width: 268px;
+  --sidebar-collapsed-width: 92px;
+  --topbar-height: 76px;
+  --page-max-width-narrow: 880px;
+  --page-max-width-default: 1180px;
+  --page-max-width-wide: 1320px;
+  --page-padding-x: clamp(18px, 2.6vw, 32px);
+  --page-padding-y: clamp(18px, 2.4vw, 30px);
+
+  --motion-fast: 0.18s;
+  --motion-base: 0.26s;
+  --motion-slow: 0.4s;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@mixin theme-vars(
+  $bg-page,
+  $bg-surface,
+  $bg-elevated,
+  $bg-muted,
+  $text-primary,
+  $text-secondary,
+  $text-muted,
+  $text-inverse,
+  $border-subtle,
+  $border-strong,
+  $brand-primary,
+  $brand-primary-soft,
+  $brand-primary-strong,
+  $brand-accent,
+  $success,
+  $warning,
+  $error,
+  $info,
+  $shadow-color,
+  $glow-color
+) {
+  --bg-page: #{$bg-page};
+  --bg-surface: #{$bg-surface};
+  --bg-elevated: #{$bg-elevated};
+  --bg-muted: #{$bg-muted};
+  --bg-spotlight: #{$glow-color};
+
+  --text-primary: #{$text-primary};
+  --text-secondary: #{$text-secondary};
+  --text-muted: #{$text-muted};
+  --text-inverse: #{$text-inverse};
+
+  --border-subtle: #{$border-subtle};
+  --border-strong: #{$border-strong};
+
+  --brand-primary: #{$brand-primary};
+  --brand-primary-soft: #{$brand-primary-soft};
+  --brand-primary-strong: #{$brand-primary-strong};
+  --brand-accent: #{$brand-accent};
+
+  --status-success: #{$success};
+  --status-warning: #{$warning};
+  --status-error: #{$error};
+  --status-info: #{$info};
+
+  --shadow-1: 0 18px 42px -34px #{$shadow-color};
+  --shadow-2: 0 26px 58px -34px #{$shadow-color};
+  --shadow-3:
+    0 34px 80px -44px #{$shadow-color},
+    0 16px 24px -18px rgba(15, 23, 42, 0.18);
+
+  --glass-line: rgba(255, 255, 255, 0.54);
+
+  --el-color-primary: var(--brand-primary);
+  --el-color-success: var(--status-success);
+  --el-color-warning: var(--status-warning);
+  --el-color-danger: var(--status-error);
+  --el-color-info: var(--status-info);
+  --el-bg-color: var(--bg-surface);
+  --el-bg-color-page: var(--bg-page);
+  --el-bg-color-overlay: var(--bg-elevated);
+  --el-fill-color-blank: var(--bg-surface);
+  --el-fill-color-light: var(--bg-muted);
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-primary);
+  --el-text-color-secondary: var(--text-secondary);
+  --el-text-color-placeholder: var(--text-muted);
+  --el-border-color: var(--border-subtle);
+  --el-border-color-light: var(--border-subtle);
+  --el-border-color-lighter: var(--bg-muted);
+
+  /* Legacy aliases kept so old page styles continue to compile safely. */
+  --color-primary: var(--brand-primary);
+  --color-primary-light: var(--brand-primary-soft);
+  --color-primary-dark: var(--brand-primary-strong);
+  --color-accent: var(--brand-accent);
+  --color-success: var(--status-success);
+  --color-warning: var(--status-warning);
+  --color-error: var(--status-error);
+  --color-info: var(--status-info);
+
+  --color-bg-page: var(--bg-page);
+  --color-bg-sidebar: var(--bg-surface);
+  --color-bg-card: var(--bg-surface);
+  --color-bg-hover: rgba(128, 145, 176, 0.12);
+  --color-bg-active: rgba(128, 145, 176, 0.18);
+
+  --color-text-base: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-heading: var(--text-primary);
+  --color-text-light: var(--text-inverse);
+  --color-text-logo: var(--text-primary);
+  --color-text-inverse: var(--text-inverse);
+
+  --color-border-card: var(--border-subtle);
+  --color-border-sidebar: var(--border-subtle);
+  --color-border-input: var(--border-strong);
+  --color-border-hover: var(--brand-primary);
+
+  --surface-page: var(--bg-page);
+  --surface-section: color-mix(in srgb, var(--bg-surface) 74%, var(--brand-primary-soft));
+  --surface-card: var(--bg-surface);
+  --surface-card-muted: var(--bg-muted);
+  --surface-card-strong: color-mix(in srgb, var(--bg-elevated) 84%, var(--brand-primary-soft));
+  --surface-subtle: color-mix(in srgb, var(--bg-surface) 84%, var(--brand-primary-soft));
+  --surface-soft: color-mix(in srgb, var(--bg-muted) 90%, var(--brand-primary-soft));
+  --stroke-soft: var(--border-subtle);
+  --stroke-strong: var(--border-strong);
+
+  --box-shadow: var(--shadow-1);
+  --box-shadow-card: var(--shadow-2);
+  --box-shadow-hover: var(--shadow-3);
+}
+
+[data-theme="paper"] {
+  @include theme-vars(
+    #f3eee4,
+    #fbf8f2,
+    #ffffff,
+    #f1ece1,
+    #223047,
+    #56657e,
+    #8390a3,
+    #fcfaf6,
+    #ddd4c5,
+    #c2b8a7,
+    #6d84b3,
+    #dde5f2,
+    #526c99,
+    #be8a46,
+    #4d8a69,
+    #b6852f,
+    #c56458,
+    #5d8da8,
+    rgba(43, 54, 76, 0.34),
+    rgba(109, 132, 179, 0.12)
+  );
+}
+
+[data-theme="midnight"] {
+  @include theme-vars(
+    #101923,
+    #162231,
+    #1c2b3d,
+    #132031,
+    #edf3fb,
+    #a4b4ca,
+    #74839b,
+    #09111b,
+    #2b3a4d,
+    #40526a,
+    #83a3d8,
+    #233853,
+    #9fb8e4,
+    #d6a66d,
+    #5fb98b,
+    #e0b35c,
+    #d77b75,
+    #72acd2,
+    rgba(0, 0, 0, 0.52),
+    rgba(131, 163, 216, 0.16)
+  );
+}
+
+[data-theme="forest"] {
+  @include theme-vars(
+    #edf1e7,
+    #fbfcf8,
+    #ffffff,
+    #eef4ec,
+    #20352d,
+    #587265,
+    #88a091,
+    #fbfdf8,
+    #d6e1d7,
+    #b8c9bc,
+    #5c866f,
+    #dbe9df,
+    #456d59,
+    #b88c54,
+    #4a8f65,
+    #ae8c46,
+    #bb655a,
+    #5f8ea1,
+    rgba(31, 49, 42, 0.3),
+    rgba(92, 134, 111, 0.1)
+  );
+}
+
+[data-theme="ocean"] {
+  @include theme-vars(
+    #eaf0f2,
+    #f7fbfc,
+    #ffffff,
+    #ebf3f5,
+    #21394a,
+    #587286,
+    #89a1b0,
+    #fbfdfe,
+    #d5e1e6,
+    #b7c8d0,
+    #5d8ba3,
+    #dceaf0,
+    #466f86,
+    #bb8b4e,
+    #4f907a,
+    #b48e46,
+    #bf665d,
+    #588fae,
+    rgba(31, 50, 63, 0.28),
+    rgba(93, 139, 163, 0.1)
+  );
+}
+
+[data-theme="amber"] {
+  @include theme-vars(
+    #f4ebdc,
+    #fbf6ee,
+    #ffffff,
+    #f2e7d5,
+    #392b20,
+    #7a624f,
+    #aa8f76,
+    #fffaf3,
+    #e0d1bd,
+    #c9b79e,
+    #a97a46,
+    #f0dfc8,
+    #8f6334,
+    #8d8fb5,
+    #4c8764,
+    #b38335,
+    #c36354,
+    #5e84a0,
+    rgba(65, 42, 23, 0.28),
+    rgba(169, 122, 70, 0.12)
+  );
+}

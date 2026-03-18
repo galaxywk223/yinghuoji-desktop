@@ -1,0 +1,150 @@
+<template>
+  <li class="timeline-item">
+    <div class="timeline-icon"><Icon icon="lucide:trophy" /></div>
+    <div class="timeline-content">
+      <div class="timeline-content-header">
+        <div>
+          <span class="badge bg-primary timeline-category mb-1">{{
+            categoryName
+          }}</span>
+          <h5 class="timeline-title">{{ item.title }}</h5>
+          <p class="timeline-date mb-0">{{ formatDate(item.event_date) }}</p>
+        </div>
+        <div v-if="enableActions" class="dropdown">
+          <el-dropdown trigger="click">
+            <span class="el-dropdown-link btn-more" @click.stop>
+              <Icon icon="lucide:more-horizontal" />
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click.stop="editItem">编辑</el-dropdown-item>
+                <el-dropdown-item
+                  divided
+                  class="danger"
+                  @click.stop="deleteItem"
+                  >删除</el-dropdown-item
+                >
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+      </div>
+      <p
+        class="timeline-description"
+        :class="{ 'text-muted': !hasDescription }"
+      >
+        {{ descriptionText }}
+      </p>
+      <div
+        v-if="attachments.length"
+        class="timeline-attachments border-top pt-3 mt-3"
+      >
+        <h6 class="card-subtitle mb-2 text-muted">附件:</h6>
+        <div class="attachments-flex">
+          <div
+            v-for="att in attachments"
+            :id="`attachment-${att.id}`"
+            :key="att.id"
+            class="attachment-item"
+          >
+            <a
+              :href="downloadUrl(att)"
+              target="_blank"
+              class="attachment-link"
+              @click.prevent="openAttachment(att)"
+            >
+              <Icon
+                icon="lucide:image"
+                :style="{ width: '16px', height: '16px' }"
+              />
+              <span>{{ att.original_filename }}</span>
+            </a>
+            <button
+              v-if="enableActions"
+              class="attachment-delete-btn"
+              title="删除此附件"
+              @click.stop="deleteAttachment(att)"
+            >
+              <Icon icon="lucide:x" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </li>
+</template>
+
+<script setup>
+import { computed } from "vue";
+import { Icon } from "@iconify/vue";
+import { milestoneAPI } from "@/api/modules/milestone";
+import request from "@/utils/request";
+
+const props = defineProps({
+  item: { type: Object, required: true },
+  categories: { type: Array, default: () => [] },
+  enableActions: { type: Boolean, default: true },
+});
+const emits = defineEmits(["edit", "deleted", "attachment-deleted"]);
+
+const categoryName = computed(() => {
+  const cat = props.categories.find((c) => c.id === props.item.category_id);
+  return cat ? cat.name : "未分类";
+});
+
+const attachments = computed(() => props.item.attachments || []);
+function formatDate(d) {
+  if (!d) return "";
+  const dt = new Date(d);
+  return `${dt.getFullYear()}年${String(dt.getMonth() + 1).padStart(2, "0")}月${String(dt.getDate()).padStart(2, "0")}日`;
+}
+const hasDescription = computed(() => {
+  const value = props.item.description;
+  return typeof value === "string" && value.trim().length > 0;
+});
+const descriptionText = computed(() =>
+  hasDescription.value ? props.item.description.trim() : "没有详细描述。",
+);
+
+function editItem() {
+  emits("edit", props.item);
+}
+async function deleteItem() {
+  if (!confirm("确定要永久删除这个成就吗？")) return;
+  try {
+    await milestoneAPI.remove(props.item.id);
+    emits("deleted", props.item.id);
+  } catch (e) {
+    console.error("delete milestone failed", e);
+  }
+}
+function downloadUrl(att) {
+  return `/api/milestones/attachments/${encodeURIComponent(att.file_path)}`;
+}
+async function openAttachment(att) {
+  try {
+    const response = await request.get(downloadUrl(att), {
+      responseType: "blob",
+    });
+    const blobUrl = URL.createObjectURL(response.data);
+    window.open(blobUrl, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+  } catch (error) {
+    console.error("open attachment failed", error);
+  }
+}
+async function deleteAttachment(att) {
+  if (!confirm("确定要永久删除这个附件吗？")) return;
+  try {
+    await milestoneAPI.deleteAttachment(props.item.id, att.id);
+    emits("attachment-deleted", {
+      milestoneId: props.item.id,
+      attachmentId: att.id,
+    });
+  } catch (e) {
+    console.error("delete attachment failed", e);
+  }
+}
+</script>
+
+<style scoped src="@/styles/components/milestones/milestone-item.scss"></style>

@@ -1,0 +1,100 @@
+// 对话框与骨架屏
+:deep(.record-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--box-shadow-hover);
+  background: var(--surface-card);
+
+  .el-dialog__header {
+    padding: 24px 32px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    border: none;
+    margin: 0;
+    position: relative;
+
+    &::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.3) 0%,
+        rgba(255, 255, 255, 0.6) 50%,
+        rgba(255, 255, 255, 0.3) 100%
+      );
+    }
+  }
+
+  .el-dialog__title {
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 600;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    letter-spacing: 0.5px;
+  }
+
+  .el-dialog__headerbtn {
+    top: 24px;
+    right: 24px;
+    width: 40px;
+    height: 40px;
+
+    .el-dialog__close {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 20px;
+      width: 40px;
+      height: 40px;
+      line-height: 40px;
+      border-radius: 50%;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      background: rgba(255, 255, 255, 0.15);
+
+      &:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.25);
+        transform: rotate(90deg);
+      }
+    }
+  }
+
+  .el-dialog__body {
+    padding: 32px;
+    background: var(--surface-card);
+    min-height: 400px;
+  }
+
+  .el-dialog__footer {
+    padding: 20px 32px 32px;
+    background: var(--surface-card);
+    border-top: 1px solid var(--color-border-card);
+  }
+}
+
+:deep(.el-overlay) {
+  background-color: rgba(0, 0, 0, 0.65);
+}
+
+:deep(.el-skeleton) {
+  background: var(--surface-card);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: var(--box-shadow);
+}
+
+:deep(.el-skeleton__item) {
+  background: linear-gradient(90deg, var(--color-bg-hover) 25%, var(--color-border-card) 50%, var(--color-bg-hover) 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s ease-in-out infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

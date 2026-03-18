@@ -1,0 +1,101 @@
+.settings-layout-container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.settings-main-content {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.settings-sidebar {
+  position: sticky;
+  top: calc(var(--topbar-height) + 18px);
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-elevated) 92%, white) 0%, var(--bg-surface) 100%);
+  box-shadow: var(--shadow-1);
+}
+
+.settings-nav-item {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 600;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.settings-nav-item:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--brand-primary) 8%, var(--bg-surface));
+}
+
+.settings-nav-item.router-link-exact-active {
+  color: var(--brand-primary-strong);
+  background: color-mix(in srgb, var(--brand-primary-soft) 70%, var(--bg-elevated));
+  box-shadow: var(--shadow-1);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 18%, var(--border-subtle));
+}
+
+.settings-content {
+  min-width: 0;
+  min-height: 500px;
+  padding: 22px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-elevated) 94%, white) 0%, var(--bg-surface) 100%);
+  box-shadow: var(--shadow-2);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+@media (max-width: 960px) {
+  .settings-main-content {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-sidebar {
+    position: static;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 10px;
+  }
+
+  .settings-nav-item {
+    white-space: nowrap;
+  }
+}

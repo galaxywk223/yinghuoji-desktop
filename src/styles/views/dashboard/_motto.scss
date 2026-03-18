@@ -1,0 +1,170 @@
+/* Google Fonts removed for performance/stability in China region */
+
+.motto-section {
+  padding: 0 32px 36px;
+  display: flex;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.motto-card {
+  position: relative;
+  background: transparent;
+  border-radius: 20px;
+  padding: 26px 32px;
+  max-width: 960px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  border: 1px solid var(--stroke-soft);
+  box-shadow: none;
+}
+
+.motto-icon {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-card-muted);
+  border-radius: 14px;
+  color: var(--color-primary);
+  border: 1px solid var(--stroke-soft);
+}
+
+.motto-icon i,
+.motto-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.motto-content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.motto-track {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.motto-track__inner {
+  display: flex;
+  align-items: center;
+  gap: 56px;
+  width: max-content;
+  transform: translateX(0);
+}
+
+.motto-track.is-animating .motto-track__inner {
+  animation: motto-marquee 18s linear infinite;
+}
+
+.motto-track__inner:hover {
+  animation-play-state: paused;
+}
+
+.motto-text {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--color-text-heading);
+  font-family:
+    "STKaiti",
+    "KaiTi",
+    "Hiragino Sans GB",
+    "PingFang SC",
+    "Songti SC",
+    "Microsoft YaHei",
+    serif;
+}
+
+.motto-refresh {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke-soft);
+  background: transparent;
+  color: var(--color-primary-dark);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--transition-speed) ease,
+    color var(--transition-speed) ease;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
+  }
+
+  &.spinning i,
+  &.spinning svg {
+    animation: spin 0.8s linear infinite;
+  }
+
+  i,
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.motto-refresh:hover:not(:disabled) {
+  background: var(--surface-card-muted);
+  color: var(--color-primary-dark);
+}
+
+@media (max-width: 768px) {
+  .motto-section {
+    padding: 0 18px 28px;
+  }
+
+  .motto-card {
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px 20px;
+  }
+
+  .motto-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .motto-text {
+    font-size: 1.6rem;
+  }
+}
+
+@keyframes motto-marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motto-track.is-animating .motto-track__inner {
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+  }
+}
