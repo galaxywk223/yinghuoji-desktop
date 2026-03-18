@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Cursor, Read, Write};
+use std::path::Path;
 
 use rusqlite::params;
 use sanitize_filename::sanitize;
@@ -19,14 +20,111 @@ fn read_json_entry(
     archive: &mut ZipArchive<Cursor<Vec<u8>>>,
     name: &str,
 ) -> Result<Vec<Value>, String> {
-    match archive.by_name(name) {
-        Ok(mut file) => {
-            let mut buf = Vec::new();
-            file.read_to_end(&mut buf).map_err(|e| e.to_string())?;
-            Ok(serde_json::from_slice::<Vec<Value>>(&buf).unwrap_or_default())
+    let normalized_target = name.replace('\\', "/");
+    let entry_name = (0..archive.len()).find_map(|index| {
+        let file = archive.by_index(index).ok()?;
+        let candidate = file.name().replace('\\', "/");
+        if candidate == normalized_target
+            || candidate.ends_with(&format!("/{normalized_target}"))
+        {
+            Some(file.name().to_string())
+        } else {
+            None
         }
-        Err(_) => Ok(Vec::new()),
+    });
+
+    match entry_name {
+        Some(entry_name) => match archive.by_name(&entry_name) {
+            Ok(mut file) => {
+                let mut buf = Vec::new();
+                file.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+                serde_json::from_slice::<Vec<Value>>(&buf).map_err(|e| e.to_string())
+            }
+            Err(_) => Ok(Vec::new()),
+        },
+        None => Ok(Vec::new()),
     }
+}
+
+fn is_attachment_entry(name: &str) -> bool {
+    let normalized = name.replace('\\', "/");
+    !normalized.ends_with('/')
+        && (normalized.starts_with("attachments/")
+            || normalized.contains("/attachments/"))
+}
+
+fn value_as_i64(value: &Value) -> Option<i64> {
+    value
+        .as_i64()
+        .or_else(|| value.as_str().and_then(|item| item.parse::<i64>().ok()))
+}
+
+fn value_as_string(value: &Value) -> Option<String> {
+    value
+        .as_str()
+        .map(|item| item.to_string())
+        .or_else(|| (!value.is_null()).then(|| value.to_string()))
+}
+
+fn basename(value: &str) -> String {
+    Path::new(value)
+        .file_name()
+        .and_then(|item| item.to_str())
+        .unwrap_or(value)
+        .to_string()
+}
+
+fn next_unique_attachment_name(
+    state: &AppState,
+    used_names: &mut HashMap<String, usize>,
+    preferred_name: &str,
+) -> String {
+    let fallback = if preferred_name.trim().is_empty() {
+        "attachment.bin"
+    } else {
+        preferred_name
+    };
+    let sanitized = sanitize(basename(fallback));
+    let stem = Path::new(&sanitized)
+        .file_stem()
+        .and_then(|item| item.to_str())
+        .unwrap_or("attachment");
+    let ext = Path::new(&sanitized)
+        .extension()
+        .and_then(|item| item.to_str())
+        .map(|item| format!(".{item}"))
+        .unwrap_or_default();
+
+    let mut index = used_names.get(&sanitized).copied().unwrap_or(0);
+    loop {
+        let candidate = if index == 0 {
+            sanitized.clone()
+        } else {
+            format!("{stem}_{index}{ext}")
+        };
+        if !state.attachments_dir.join(&candidate).exists() {
+            used_names.insert(sanitized.clone(), index + 1);
+            return candidate;
+        }
+        index += 1;
+    }
+}
+
+fn consume_attachment_bytes(
+    attachment_blobs: &mut HashMap<String, Vec<Vec<u8>>>,
+    candidates: &[String],
+) -> Option<Vec<u8>> {
+    for candidate in candidates {
+        if let Some(bytes_list) = attachment_blobs.get_mut(candidate) {
+            if let Some(bytes) = bytes_list.pop() {
+                if bytes_list.is_empty() {
+                    attachment_blobs.remove(candidate);
+                }
+                return Some(bytes);
+            }
+        }
+    }
+    None
 }
 
 #[tauri::command]
@@ -216,102 +314,370 @@ pub fn backup_import_zip(
     file_bytes: Vec<u8>,
 ) -> AppResult<Value> {
     let _ = file_name;
-    backup_clear_all(state.clone())?;
-    let conn = connection(&state)?;
     let mut archive =
         ZipArchive::new(Cursor::new(file_bytes)).map_err(|e| super::common::invalid(&e.to_string()))?;
 
     let settings = read_json_entry(&mut archive, "data/setting.json")
         .map_err(|e| super::common::invalid(&e))?;
-    for item in settings {
+    let stages = read_json_entry(&mut archive, "data/stage.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let categories = read_json_entry(&mut archive, "data/category.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let subcategories = read_json_entry(&mut archive, "data/sub_category.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let records = read_json_entry(&mut archive, "data/log_entry.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let mottos = read_json_entry(&mut archive, "data/motto.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let milestone_categories = read_json_entry(&mut archive, "data/milestone_category.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let milestones = read_json_entry(&mut archive, "data/milestone.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let milestone_attachments = read_json_entry(&mut archive, "data/milestone_attachment.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let countdowns = read_json_entry(&mut archive, "data/countdown_event.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let local_profiles = read_json_entry(&mut archive, "data/local_profile.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let ai_insights = read_json_entry(&mut archive, "data/ai_insight.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let ai_chat_sessions = read_json_entry(&mut archive, "data/ai_chat_session.json")
+        .map_err(|e| super::common::invalid(&e))?;
+    let ai_chat_messages = read_json_entry(&mut archive, "data/ai_chat_message.json")
+        .map_err(|e| super::common::invalid(&e))?;
+
+    let mut attachment_blobs = HashMap::<String, Vec<Vec<u8>>>::new();
+    for idx in 0..archive.len() {
+        let mut file = archive
+            .by_index(idx)
+            .map_err(|e| super::common::invalid(&e.to_string()))?;
+        let name = file.name().to_string();
+        if is_attachment_entry(&name) {
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf)
+                .map_err(|e| super::common::invalid(&e.to_string()))?;
+            attachment_blobs
+                .entry(basename(&name))
+                .or_default()
+                .push(buf);
+        }
+    }
+
+    let mut conn = connection(&state)?;
+    let tx = conn.transaction()?;
+
+    for table in [
+        "ai_chat_message",
+        "ai_chat_session",
+        "ai_insight",
+        "milestone_attachment",
+        "milestone",
+        "milestone_category",
+        "countdown_event",
+        "motto",
+        "weekly_data",
+        "daily_data",
+        "log_entry",
+        "sub_category",
+        "category",
+        "stage",
+    ] {
+        tx.execute(&format!("DELETE FROM {table}"), [])?;
+    }
+    db::set_setting(&tx, "active_stage_id", "0")?;
+    let _ = db::remove_dir_contents(&state.attachments_dir);
+
+    if let Some(profile) = local_profiles.first() {
+        tx.execute(
+            "UPDATE local_profile SET username = ?1, email = ?2, created_at = ?3 WHERE id = 1",
+            params![
+                profile["username"].as_str().unwrap_or("学习者"),
+                profile["email"].as_str().unwrap_or(""),
+                profile["created_at"].as_str().unwrap_or(&db::now_local_iso())
+            ],
+        )?;
+    }
+
+    for item in &settings {
         if let Some(key) = item["key"].as_str() {
-            db::set_setting(&conn, key, &item["value"].to_string())?;
+            let value = item["value"]
+                .as_str()
+                .map(|text| text.to_string())
+                .unwrap_or_else(|| item["value"].to_string());
+            db::set_setting(&tx, key, &value)?;
         }
     }
 
     let mut stage_map = HashMap::<i64, i64>::new();
-    for item in read_json_entry(&mut archive, "data/stage.json").map_err(|e| super::common::invalid(&e))? {
-        conn.execute(
+    for item in stages {
+        tx.execute(
             "INSERT INTO stage (name, start_date) VALUES (?1, ?2)",
-            params![item["name"].as_str().unwrap_or(""), item["start_date"].as_str().unwrap_or("")],
+            params![
+                item["name"].as_str().unwrap_or("未命名阶段"),
+                item["start_date"].as_str().unwrap_or("")
+            ],
         )?;
-        if let Some(old_id) = item["id"].as_i64() {
-            stage_map.insert(old_id, conn.last_insert_rowid());
+        if let Some(old_id) = value_as_i64(&item["id"]) {
+            stage_map.insert(old_id, tx.last_insert_rowid());
         }
     }
 
     let mut category_map = HashMap::<i64, i64>::new();
-    for item in read_json_entry(&mut archive, "data/category.json").map_err(|e| super::common::invalid(&e))? {
-        conn.execute(
-            "INSERT INTO category (name) VALUES (?1)",
-            params![item["name"].as_str().unwrap_or("")],
-        )?;
-        if let Some(old_id) = item["id"].as_i64() {
-            category_map.insert(old_id, conn.last_insert_rowid());
+    let mut category_name_map = HashMap::<String, i64>::new();
+    for item in categories {
+        let name = item["name"].as_str().unwrap_or("未命名分类").trim();
+        tx.execute("INSERT INTO category (name) VALUES (?1)", params![name])?;
+        let new_id = tx.last_insert_rowid();
+        category_name_map.insert(name.to_string(), new_id);
+        if let Some(old_id) = value_as_i64(&item["id"]) {
+            category_map.insert(old_id, new_id);
         }
     }
 
     let mut sub_map = HashMap::<i64, i64>::new();
-    for item in read_json_entry(&mut archive, "data/sub_category.json").map_err(|e| super::common::invalid(&e))? {
-        let category_id = item["category_id"]
-            .as_i64()
-            .and_then(|old| category_map.get(&old).copied())
-            .unwrap_or_default();
-        conn.execute(
+    let mut sub_name_map = HashMap::<(i64, String), i64>::new();
+    for item in subcategories {
+        let Some(category_id) = value_as_i64(&item["category_id"])
+            .and_then(|old_id| category_map.get(&old_id).copied()) else {
+            continue;
+        };
+        let name = item["name"].as_str().unwrap_or("未命名标签").trim();
+        tx.execute(
             "INSERT INTO sub_category (name, category_id) VALUES (?1, ?2)",
-            params![item["name"].as_str().unwrap_or(""), category_id],
+            params![name, category_id],
         )?;
-        if let Some(old_id) = item["id"].as_i64() {
-            sub_map.insert(old_id, conn.last_insert_rowid());
+        let new_id = tx.last_insert_rowid();
+        sub_name_map.insert((category_id, name.to_string()), new_id);
+        if let Some(old_id) = value_as_i64(&item["id"]) {
+            sub_map.insert(old_id, new_id);
         }
     }
 
-    for item in read_json_entry(&mut archive, "data/log_entry.json").map_err(|e| super::common::invalid(&e))? {
-        let stage_id = item["stage_id"]
-            .as_i64()
-            .and_then(|old| stage_map.get(&old).copied())
-            .unwrap_or_default();
-        let subcategory_id = item["subcategory_id"]
-            .as_i64()
-            .and_then(|old| sub_map.get(&old).copied());
-        conn.execute(
-            "INSERT INTO log_entry (log_date, time_slot, task, actual_duration, mood, notes, stage_id, subcategory_id, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+    let mut milestone_category_map = HashMap::<i64, i64>::new();
+    for item in milestone_categories {
+        let name = item["name"].as_str().unwrap_or("未命名里程碑分类").trim();
+        tx.execute(
+            "INSERT INTO milestone_category (name) VALUES (?1)",
+            params![name],
+        )?;
+        if let Some(old_id) = value_as_i64(&item["id"]) {
+            milestone_category_map.insert(old_id, tx.last_insert_rowid());
+        }
+    }
+
+    let mut milestone_map = HashMap::<i64, i64>::new();
+    for item in milestones {
+        let category_id = value_as_i64(&item["category_id"])
+            .and_then(|old_id| milestone_category_map.get(&old_id).copied());
+        tx.execute(
+            "INSERT INTO milestone (title, event_date, description, category_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
-                item["log_date"].as_str().unwrap_or(""),
+                item["title"].as_str().unwrap_or("未命名成就"),
+                item["event_date"].as_str().unwrap_or_else(|| item["target_date"].as_str().unwrap_or("")),
+                item["description"].as_str().unwrap_or(""),
+                category_id,
+                item["created_at"].as_str().unwrap_or(&db::now_local_iso())
+            ],
+        )?;
+        if let Some(old_id) = value_as_i64(&item["id"]) {
+            milestone_map.insert(old_id, tx.last_insert_rowid());
+        }
+    }
+
+    for item in records {
+        let log_date = item["log_date"].as_str().unwrap_or("");
+        let mapped_stage_id = value_as_i64(&item["stage_id"])
+            .and_then(|old_id| stage_map.get(&old_id).copied())
+            .or_else(|| {
+                db::parse_date(log_date)
+                    .ok()
+                    .and_then(|date| db::stage_for_date(&tx, date).ok().flatten().map(|tuple| tuple.0))
+            })
+            .ok_or_else(|| super::common::invalid("导入失败：无法为学习记录匹配阶段"))?;
+
+        let mapped_subcategory_id = value_as_i64(&item["subcategory_id"])
+            .and_then(|old_id| sub_map.get(&old_id).copied())
+            .or_else(|| {
+                let sub = &item["subcategory"];
+                let category_id = value_as_i64(&sub["category_id"])
+                    .and_then(|old_id| category_map.get(&old_id).copied())
+                    .or_else(|| {
+                        sub["category"]["name"]
+                            .as_str()
+                            .and_then(|name| category_name_map.get(name).copied())
+                    });
+                match (category_id, sub["name"].as_str()) {
+                    (Some(category_id), Some(sub_name)) => sub_name_map.get(&(category_id, sub_name.to_string())).copied(),
+                    _ => None,
+                }
+            });
+
+        tx.execute(
+            "INSERT INTO log_entry (
+                log_date, time_slot, task, actual_duration, legacy_category, mood, notes,
+                stage_id, subcategory_id, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                log_date,
                 item["time_slot"].as_str(),
                 item["task"].as_str().unwrap_or(""),
-                item["actual_duration"].as_i64().unwrap_or(0),
-                item["mood"].as_i64(),
+                value_as_i64(&item["actual_duration"]).unwrap_or(0),
+                item["legacy_category"].as_str(),
+                value_as_i64(&item["mood"]),
                 item["notes"].as_str().unwrap_or(""),
-                stage_id,
-                subcategory_id,
+                mapped_stage_id,
+                mapped_subcategory_id,
                 item["created_at"].as_str().unwrap_or(&db::now_utc_iso()),
                 item["updated_at"].as_str()
             ],
         )?;
     }
 
-    for item in read_json_entry(&mut archive, "data/motto.json").map_err(|e| super::common::invalid(&e))? {
-        conn.execute(
-            "INSERT INTO motto (content, created_at) VALUES (?1, ?2)",
-            params![item["content"].as_str().unwrap_or(""), item["created_at"].as_str().unwrap_or(&db::now_local_iso())],
+    let mut attachment_name_uses = HashMap::<String, usize>::new();
+    for item in milestone_attachments {
+        let Some(milestone_id) = value_as_i64(&item["milestone_id"])
+            .and_then(|old_id| milestone_map.get(&old_id).copied()) else {
+            continue;
+        };
+        let original_path = item["file_path"].as_str().unwrap_or("");
+        let original_filename = item["original_filename"]
+            .as_str()
+            .map(|item| item.to_string())
+            .unwrap_or_else(|| basename(original_path));
+        let file_candidates = vec![
+            basename(original_path),
+            basename(&original_filename),
+        ];
+        let relative_name = if let Some(bytes) =
+            consume_attachment_bytes(&mut attachment_blobs, &file_candidates)
+        {
+            let next_name =
+                next_unique_attachment_name(&state, &mut attachment_name_uses, &original_filename);
+            fs::write(state.attachments_dir.join(&next_name), bytes)?;
+            next_name
+        } else {
+            next_unique_attachment_name(
+                &state,
+                &mut attachment_name_uses,
+                &basename(&original_filename),
+            )
+        };
+
+        tx.execute(
+            "INSERT INTO milestone_attachment (milestone_id, file_path, original_filename, uploaded_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                milestone_id,
+                relative_name,
+                original_filename,
+                item["uploaded_at"].as_str().unwrap_or(&db::now_local_iso())
+            ],
         )?;
     }
 
-    for idx in 0..archive.len() {
-        let mut file = archive
-            .by_index(idx)
-            .map_err(|e| super::common::invalid(&e.to_string()))?;
-        let name = file.name().to_string();
-        if name.starts_with("attachments/") && !name.ends_with('/') {
-            let relative = sanitize(name.trim_start_matches("attachments/"));
-            let mut buf = Vec::new();
-            file.read_to_end(&mut buf)
-                .map_err(|e| super::common::invalid(&e.to_string()))?;
-            fs::write(state.attachments_dir.join(relative), buf)?;
+    for item in countdowns {
+        tx.execute(
+            "INSERT INTO countdown_event (title, target_datetime_utc, created_at_utc)
+             VALUES (?1, ?2, ?3)",
+            params![
+                item["title"].as_str().unwrap_or("未命名倒计时"),
+                item["target_datetime_utc"].as_str().unwrap_or(""),
+                item["created_at_utc"].as_str().unwrap_or(&db::now_utc_iso())
+            ],
+        )?;
+    }
+
+    for item in mottos {
+        tx.execute(
+            "INSERT INTO motto (content, created_at) VALUES (?1, ?2)",
+            params![
+                item["content"].as_str().unwrap_or(""),
+                item["created_at"].as_str().unwrap_or(&db::now_local_iso())
+            ],
+        )?;
+    }
+
+    for item in ai_insights {
+        tx.execute(
+            "INSERT INTO ai_insight (
+                insight_type, scope, scope_reference, start_date, end_date, next_start_date,
+                next_end_date, input_snapshot, output_text, created_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                item["insight_type"].as_str().unwrap_or("analysis"),
+                item["scope"].as_str().unwrap_or("global"),
+                value_as_i64(&item["scope_reference"]),
+                item["start_date"].as_str(),
+                item["end_date"].as_str(),
+                item["next_start_date"].as_str(),
+                item["next_end_date"].as_str(),
+                value_as_string(&item["input_snapshot"]),
+                item["output_text"].as_str().unwrap_or(""),
+                item["created_at"].as_str().unwrap_or(&db::now_local_iso())
+            ],
+        )?;
+    }
+
+    let mut ai_session_map = HashMap::<i64, i64>::new();
+    for item in ai_chat_sessions {
+        tx.execute(
+            "INSERT INTO ai_chat_session (
+                title, scope, scope_reference, date_reference, created_at, updated_at, last_message_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                item["title"].as_str().unwrap_or("新的对话"),
+                item["scope"].as_str().unwrap_or("global"),
+                value_as_i64(&item["scope_reference"]),
+                item["date_reference"].as_str(),
+                item["created_at"].as_str().unwrap_or(&db::now_local_iso()),
+                item["updated_at"].as_str().unwrap_or(&db::now_local_iso()),
+                item["last_message_at"].as_str().unwrap_or(&db::now_local_iso())
+            ],
+        )?;
+        if let Some(old_id) = value_as_i64(&item["id"]) {
+            ai_session_map.insert(old_id, tx.last_insert_rowid());
         }
     }
 
+    for item in ai_chat_messages {
+        let Some(session_id) = value_as_i64(&item["session_id"])
+            .and_then(|old_id| ai_session_map.get(&old_id).copied()) else {
+            continue;
+        };
+        tx.execute(
+            "INSERT INTO ai_chat_message (
+                session_id, role, content, scope, scope_reference, date_reference,
+                generation_mode, model_name, meta_snapshot, created_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                session_id,
+                item["role"].as_str().unwrap_or("assistant"),
+                item["content"].as_str().unwrap_or(""),
+                item["scope"].as_str().unwrap_or("global"),
+                value_as_i64(&item["scope_reference"]),
+                item["date_reference"].as_str(),
+                item["generation_mode"].as_str(),
+                item["model_name"].as_str(),
+                value_as_string(&item["meta"]),
+                item["created_at"].as_str().unwrap_or(&db::now_local_iso())
+            ],
+        )?;
+    }
+
+    for stage_id in stage_map.values() {
+        db::recalculate_efficiency_for_stage(&tx, *stage_id)?;
+    }
+
+    if let Some(active_stage_id) = settings
+        .iter()
+        .find(|item| item["key"].as_str() == Some("active_stage_id"))
+        .and_then(|item| value_as_i64(&item["value"]))
+        .and_then(|old_id| stage_map.get(&old_id).copied())
+    {
+        db::set_setting(&tx, "active_stage_id", &active_stage_id.to_string())?;
+    }
+
+    tx.commit()?;
     Ok(json!({ "success": true, "message": "导入成功" }))
 }

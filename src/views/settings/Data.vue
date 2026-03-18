@@ -95,7 +95,7 @@
 import { ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import PageContainer from "@/components/layout/PageContainer.vue";
-import request from "@/utils/request";
+import request, { extractRequestErrorMessage } from "@/utils/request";
 
 defineOptions({ name: "DataSettingsView" });
 
@@ -189,8 +189,7 @@ async function confirmImport() {
     }
   } catch (e) {
     console.error("导入错误:", e);
-    const errorMsg =
-      e?.response?.data?.message || e?.message || "导入失败，请检查文件格式";
+    const errorMsg = extractRequestErrorMessage(e) || "导入失败，请检查文件格式";
     ElMessage.error(errorMsg);
   } finally {
     importing.value = false;

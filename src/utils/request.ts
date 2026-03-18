@@ -32,8 +32,8 @@ async function formDataToFilePayload(formData: FormData) {
     throw new Error("未找到上传文件");
   }
   return {
-    file_name: file.name,
-    file_bytes: await fileToBytes(file),
+    fileName: file.name,
+    fileBytes: await fileToBytes(file),
   };
 }
 
@@ -64,6 +64,44 @@ function synthesizeForecastStatus() {
       forecasts: null,
     },
   };
+}
+
+export function extractRequestErrorMessage(error: any) {
+  const candidates = [
+    error?.response?.data?.message,
+    error?.message,
+    error?.error,
+    error?.cause?.message,
+    typeof error === "string" ? error : null,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      const text = candidate.trim();
+      if (text.startsWith("{") && text.endsWith("}")) {
+        try {
+          const parsed = JSON.parse(text);
+          if (typeof parsed?.message === "string" && parsed.message.trim()) {
+            return parsed.message.trim();
+          }
+        } catch {
+          return text;
+        }
+      }
+      return text;
+    }
+  }
+
+  if (error && typeof error === "object") {
+    if (typeof error.message?.message === "string" && error.message.message.trim()) {
+      return error.message.message.trim();
+    }
+    if (typeof error.error?.message === "string" && error.error.message.trim()) {
+      return error.error.message.trim();
+    }
+  }
+
+  return "请求失败";
 }
 
 async function baseRequest(config: RequestConfig) {
@@ -315,8 +353,7 @@ async function baseRequest(config: RequestConfig) {
 
     throw new Error(`Unsupported request: ${method.toUpperCase()} ${url}`);
   } catch (error: any) {
-    const message =
-      error?.message || error?.error || error?.toString?.() || "请求失败";
+    const message = extractRequestErrorMessage(error);
     ElMessage.error(message);
     throw error;
   }
