@@ -1,4 +1,20 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    match value {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(text)) => Ok(Some(text)),
+        Some(serde_json::Value::Number(number)) => Ok(Some(number.to_string())),
+        Some(serde_json::Value::Bool(flag)) => Ok(Some(flag.to_string())),
+        Some(other) => Err(serde::de::Error::custom(format!(
+            "expected string or number, got {other}"
+        ))),
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ProfileUpdatePayload {
@@ -77,11 +93,13 @@ pub struct RecentRecordsQuery {
 #[derive(Debug, Deserialize, Default)]
 pub struct ChartsOverviewQuery {
     pub view: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub stage_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 pub struct ChartsCategoryQuery {
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub stage_id: Option<String>,
     pub range_mode: Option<String>,
     pub start_date: Option<String>,
@@ -93,7 +111,8 @@ pub struct ChartsCategoryQuery {
 pub struct CategoryTrendQuery {
     pub category_id: Option<i64>,
     pub subcategory_id: Option<i64>,
-    pub stage_id: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    pub stage_id: Option<String>,
     pub range_mode: Option<String>,
     pub start_date: Option<String>,
     pub end_date: Option<String>,

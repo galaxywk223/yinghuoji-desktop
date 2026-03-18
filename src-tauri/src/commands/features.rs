@@ -8,8 +8,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::models::{
-    CountdownPayload, MilestoneCategoryPayload, MilestonePayload, MilestonesListQuery,
-    MottoPayload,
+    CountdownPayload, MilestoneCategoryPayload, MilestonePayload, MilestonesListQuery, MottoPayload,
 };
 use crate::{AppResult, AppState};
 
@@ -27,11 +26,17 @@ pub fn countdowns_list(state: State<'_, AppState>) -> AppResult<Value> {
         .query_map([], |row| {
             let target = row.get::<_, String>(2)?;
             let created = row.get::<_, String>(3)?;
-            let target_dt = db::parse_rfc3339(&target).map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let created_dt = db::parse_rfc3339(&created).map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let target_dt =
+                db::parse_rfc3339(&target).map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let created_dt =
+                db::parse_rfc3339(&created).map_err(|_| rusqlite::Error::InvalidQuery)?;
             let remaining = target_dt - now;
             let is_expired = remaining.num_seconds() < 0;
-            let remaining_days = if is_expired { 0 } else { remaining.num_days().max(0) };
+            let remaining_days = if is_expired {
+                0
+            } else {
+                remaining.num_days().max(0)
+            };
             let total = (target_dt - created_dt).num_seconds().max(1);
             let elapsed = (now - created_dt).num_seconds().max(0);
             let progress = ((elapsed as f64 / total as f64) * 100.0).clamp(0.0, 100.0);
@@ -106,7 +111,11 @@ pub fn countdown_update(
     let conn = connection(&state)?;
     conn.execute(
         "UPDATE countdown_event SET title = ?1, target_datetime_utc = ?2 WHERE id = ?3",
-        params![payload.title.trim(), payload.target_datetime_utc, countdown_id],
+        params![
+            payload.title.trim(),
+            payload.target_datetime_utc,
+            countdown_id
+        ],
     )?;
     Ok(json!({
         "success": true,
@@ -118,7 +127,10 @@ pub fn countdown_update(
 #[tauri::command]
 pub fn countdown_delete(state: State<'_, AppState>, countdown_id: i64) -> AppResult<Value> {
     let conn = connection(&state)?;
-    conn.execute("DELETE FROM countdown_event WHERE id = ?1", params![countdown_id])?;
+    conn.execute(
+        "DELETE FROM countdown_event WHERE id = ?1",
+        params![countdown_id],
+    )?;
     Ok(json!({ "success": true, "message": "倒计时事件已删除" }))
 }
 
@@ -203,7 +215,11 @@ pub fn motto_create(state: State<'_, AppState>, payload: MottoPayload) -> AppRes
 }
 
 #[tauri::command]
-pub fn motto_update(state: State<'_, AppState>, motto_id: i64, payload: MottoPayload) -> AppResult<Value> {
+pub fn motto_update(
+    state: State<'_, AppState>,
+    motto_id: i64,
+    payload: MottoPayload,
+) -> AppResult<Value> {
     let conn = connection(&state)?;
     conn.execute(
         "UPDATE motto SET content = ?1 WHERE id = ?2",
@@ -224,10 +240,7 @@ pub fn motto_delete(state: State<'_, AppState>, motto_id: i64) -> AppResult<Valu
 }
 
 #[tauri::command]
-pub fn milestones_list(
-    state: State<'_, AppState>,
-    query: MilestonesListQuery,
-) -> AppResult<Value> {
+pub fn milestones_list(state: State<'_, AppState>, query: MilestonesListQuery) -> AppResult<Value> {
     let conn = connection(&state)?;
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(10).clamp(1, 50);
@@ -262,8 +275,9 @@ pub fn milestones_list(
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut milestones = Vec::new();
     for (id, title, event_date, description, category_id, created_at) in bases {
-        let mut att_stmt =
-            conn.prepare("SELECT id FROM milestone_attachment WHERE milestone_id = ?1 ORDER BY uploaded_at ASC")?;
+        let mut att_stmt = conn.prepare(
+            "SELECT id FROM milestone_attachment WHERE milestone_id = ?1 ORDER BY uploaded_at ASC",
+        )?;
         let att_ids = att_stmt
             .query_map(params![id], |row| row.get::<_, i64>(0))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -321,19 +335,17 @@ pub fn milestone_get(state: State<'_, AppState>, milestone_id: i64) -> AppResult
 }
 
 #[tauri::command]
-pub fn milestone_create(
-    state: State<'_, AppState>,
-    payload: MilestonePayload,
-) -> AppResult<Value> {
+pub fn milestone_create(state: State<'_, AppState>, payload: MilestonePayload) -> AppResult<Value> {
     let conn = connection(&state)?;
     conn.execute(
         "INSERT INTO milestone (title, event_date, description, category_id, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5)",
         params![
             payload.title.trim(),
-            payload
-                .event_date
-                .unwrap_or_else(|| chrono::Local::now().date_naive().format("%Y-%m-%d").to_string()),
+            payload.event_date.unwrap_or_else(|| chrono::Local::now()
+                .date_naive()
+                .format("%Y-%m-%d")
+                .to_string()),
             payload.description.unwrap_or_default(),
             payload.category_id,
             db::now_local_iso()
@@ -462,10 +474,7 @@ pub fn milestone_category_update(
 }
 
 #[tauri::command]
-pub fn milestone_category_delete(
-    state: State<'_, AppState>,
-    category_id: i64,
-) -> AppResult<Value> {
+pub fn milestone_category_delete(state: State<'_, AppState>, category_id: i64) -> AppResult<Value> {
     let conn = connection(&state)?;
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM milestone WHERE category_id = ?1",
@@ -495,7 +504,12 @@ pub fn milestone_attachment_upload(
         .next()
         .unwrap_or("")
         .to_ascii_lowercase();
-    let relative = sanitize(format!("milestone_{}_{}.{}", milestone_id, Uuid::new_v4(), ext));
+    let relative = sanitize(format!(
+        "milestone_{}_{}.{}",
+        milestone_id,
+        Uuid::new_v4(),
+        ext
+    ));
     fs::write(state.attachments_dir.join(&relative), file_bytes)?;
     conn.execute(
         "INSERT INTO milestone_attachment (milestone_id, file_path, original_filename, uploaded_at)
@@ -517,7 +531,8 @@ pub fn milestone_attachment_delete(
     attachment_id: i64,
 ) -> AppResult<Value> {
     let conn = connection(&state)?;
-    let attachment = attachment_view_json(&conn, attachment_id)?.ok_or_else(|| invalid("附件不存在"))?;
+    let attachment =
+        attachment_view_json(&conn, attachment_id)?.ok_or_else(|| invalid("附件不存在"))?;
     if attachment["milestone_id"].as_i64() != Some(milestone_id) {
         return Err(invalid("附件不存在"));
     }
@@ -530,10 +545,7 @@ pub fn milestone_attachment_delete(
 }
 
 #[tauri::command]
-pub fn milestone_attachment_get(
-    state: State<'_, AppState>,
-    file_path: String,
-) -> AppResult<Value> {
+pub fn milestone_attachment_get(state: State<'_, AppState>, file_path: String) -> AppResult<Value> {
     let bytes = fs::read(state.attachments_dir.join(&file_path))?;
     Ok(json!({ "success": true, "data": bytes, "file_name": file_path }))
 }

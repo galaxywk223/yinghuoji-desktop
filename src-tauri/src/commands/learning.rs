@@ -1,100 +1,74 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
-use chrono::Datelike;
+use chrono::{Datelike, Duration, Local, NaiveDate};
 use rusqlite::params;
 use serde_json::{json, Value};
 use tauri::State;
 
 use crate::db;
 use crate::models::{
-    CategoryPayload, CategoryTrendQuery, ChartsCategoryQuery, ChartsOverviewQuery, RecentRecordsQuery,
-    RecordPayload, RecordsListQuery, StagePayload, StatsQuery, StructuredRecordsQuery,
-    SubcategoryMergePayload, SubcategoryUpdatePayload,
+    CategoryPayload, CategoryTrendQuery, ChartsCategoryQuery, ChartsOverviewQuery,
+    RecentRecordsQuery, RecordPayload, RecordsListQuery, StagePayload, StatsQuery,
+    StructuredRecordsQuery, SubcategoryMergePayload, SubcategoryUpdatePayload,
 };
 use crate::{AppResult, AppState};
 
 use super::common::{
-    active_stage_id, categories_json, connection, ensure_stage_exists, invalid, moving_average_points,
-    record_json_by_id, stage_json_by_id, stages_json, subcategory_json_by_id, labels_for_daily,
+    active_stage_id, categories_json, connection, ensure_stage_exists, invalid, labels_for_daily,
+    moving_average_points, record_json_by_id, stage_json_by_id, stages_json,
+    subcategory_json_by_id,
 };
 
 fn labels_for_weekly(
     conn: &rusqlite::Connection,
     stage_id: Option<i64>,
 ) -> Result<(Vec<String>, Vec<f64>, Vec<f64>)> {
-    if let Some(stage_id) = stage_id {
-        let stage_start = db::stage_start_date(conn, stage_id)?;
-        let mut duration_map = BTreeMap::<(i32, i32), i64>::new();
-        let mut weekly_map = BTreeMap::<(i32, i32), f64>::new();
-
-        let mut log_stmt =
-            conn.prepare("SELECT log_date, COALESCE(actual_duration, 0) FROM log_entry WHERE stage_id = ?1")?;
-        let logs = log_stmt
-            .query_map(params![stage_id], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        for (log_date_str, duration) in logs {
-            let log_date = db::parse_date(&log_date_str)?;
-            let (_, _, year, week_num) = db::get_custom_week_window(log_date, stage_start);
-            *duration_map.entry((year, week_num)).or_insert(0) += duration;
-        }
-
-        let mut weekly_stmt =
-            conn.prepare("SELECT year, week_num, COALESCE(efficiency, 0) FROM weekly_data WHERE stage_id = ?1 ORDER BY year ASC, week_num ASC")?;
-        let rows = weekly_stmt
-            .query_map(params![stage_id], |row| {
-                Ok((row.get::<_, i32>(0)?, row.get::<_, i32>(1)?, row.get::<_, f64>(2)?))
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        for (year, week_num, efficiency) in rows {
-            weekly_map.insert((year, week_num), efficiency);
-        }
-
-        let mut labels = Vec::new();
-        let mut duration = Vec::new();
-        let mut efficiency = Vec::new();
-        for ((year, week_num), score) in weekly_map {
-            labels.push(format!("{year} W{week_num:02}"));
-            duration.push(
-                (duration_map.get(&(year, week_num)).copied().unwrap_or(0) as f64 / 60.0 * 10.0)
-                    .round()
-                    / 10.0,
-            );
-            efficiency.push((score * 100.0).round() / 100.0);
-        }
-        return Ok((labels, duration, efficiency));
+    let (daily_labels, daily_duration, daily_efficiency) =
+        super::common::labels_for_daily(conn, stage_id)?;
+    if daily_labels.is_empty() {
+        return Ok((Vec::new(), Vec::new(), Vec::new()));
     }
 
-    let mut stage_stmt = conn.prepare("SELECT id FROM stage ORDER BY start_date ASC")?;
-    let stage_ids = stage_stmt
-        .query_map([], |row| row.get::<_, i64>(0))?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut combined = BTreeMap::<String, (f64, f64, usize)>::new();
-    for stage_id in stage_ids {
-        let (labels, duration, efficiency) = labels_for_weekly(conn, Some(stage_id))?;
-        for (idx, label) in labels.iter().enumerate() {
-            let entry = combined.entry(label.clone()).or_insert((0.0, 0.0, 0));
-            entry.0 += duration[idx];
-            entry.1 += efficiency[idx];
-            entry.2 += 1;
-        }
+    let stage_anchor = if let Some(stage_id) = stage_id {
+        db::stage_start_date(conn, stage_id)?
+    } else {
+        let earliest_stage: String = conn.query_row(
+            "SELECT start_date FROM stage ORDER BY start_date ASC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )?;
+        db::parse_date(&earliest_stage)?
+    };
+
+    let today = Local::now().date_naive();
+    let mut weekly_map = BTreeMap::<(i32, i32), (f64, f64, i64, NaiveDate, NaiveDate)>::new();
+    for (index, label) in daily_labels.iter().enumerate() {
+        let day = db::parse_date(label)?;
+        let (week_start, week_end, year, week_num) = db::get_custom_week_window(day, stage_anchor);
+        let entry = weekly_map
+            .entry((year, week_num))
+            .or_insert((0.0, 0.0, 0, week_start, week_end));
+        entry.0 += daily_duration.get(index).copied().unwrap_or(0.0);
+        entry.1 += daily_efficiency.get(index).copied().unwrap_or(0.0);
+        entry.2 += 1;
     }
-    let labels = combined.keys().cloned().collect::<Vec<_>>();
-    let duration = labels
-        .iter()
-        .map(|label| combined.get(label).map(|item| (item.0 * 10.0).round() / 10.0).unwrap_or(0.0))
-        .collect::<Vec<_>>();
-    let efficiency = labels
-        .iter()
-        .map(|label| {
-            combined
-                .get(label)
-                .map(|item| ((item.1 / item.2 as f64) * 100.0).round() / 100.0)
-                .unwrap_or(0.0)
-        })
-        .collect::<Vec<_>>();
+
+    let mut labels = Vec::new();
+    let mut duration = Vec::new();
+    let mut efficiency = Vec::new();
+    for ((year, week_num), (duration_sum, efficiency_sum, days, week_start, week_end)) in weekly_map
+    {
+        let elapsed_days = if today >= week_start && today <= week_end {
+            (today - week_start).num_days() + 1
+        } else {
+            days
+        }
+        .clamp(1, 7);
+        labels.push(format!("{year}-W{week_num:02}"));
+        duration.push((duration_sum / elapsed_days as f64 * 100.0).round() / 100.0);
+        efficiency.push((efficiency_sum / elapsed_days as f64 * 100.0).round() / 100.0);
+    }
     Ok((labels, duration, efficiency))
 }
 
@@ -114,9 +88,12 @@ pub fn stage_get(state: State<'_, AppState>, stage_id: i64) -> AppResult<Value> 
 #[tauri::command]
 pub fn stage_create(state: State<'_, AppState>, payload: StagePayload) -> AppResult<Value> {
     let conn = connection(&state)?;
-    let start_date = payload
-        .start_date
-        .unwrap_or_else(|| chrono::Local::now().date_naive().format("%Y-%m-%d").to_string());
+    let start_date = payload.start_date.unwrap_or_else(|| {
+        chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string()
+    });
     conn.execute(
         "INSERT INTO stage (name, start_date) VALUES (?1, ?2)",
         params![payload.name.trim(), start_date],
@@ -134,7 +111,11 @@ pub fn stage_create(state: State<'_, AppState>, payload: StagePayload) -> AppRes
 }
 
 #[tauri::command]
-pub fn stage_update(state: State<'_, AppState>, stage_id: i64, payload: StagePayload) -> AppResult<Value> {
+pub fn stage_update(
+    state: State<'_, AppState>,
+    stage_id: i64,
+    payload: StagePayload,
+) -> AppResult<Value> {
     let conn = connection(&state)?;
     ensure_stage_exists(&conn, stage_id)?;
     let current = stage_json_by_id(&conn, stage_id)?.ok_or_else(|| invalid("阶段不存在"))?;
@@ -190,10 +171,19 @@ pub fn stage_delete(state: State<'_, AppState>, stage_id: i64) -> AppResult<Valu
                 break;
             }
         }
-        conn.execute("UPDATE log_entry SET stage_id = ?1 WHERE id = ?2", params![next_stage_id, log_id])?;
+        conn.execute(
+            "UPDATE log_entry SET stage_id = ?1 WHERE id = ?2",
+            params![next_stage_id, log_id],
+        )?;
     }
-    conn.execute("DELETE FROM daily_data WHERE stage_id = ?1", params![stage_id])?;
-    conn.execute("DELETE FROM weekly_data WHERE stage_id = ?1", params![stage_id])?;
+    conn.execute(
+        "DELETE FROM daily_data WHERE stage_id = ?1",
+        params![stage_id],
+    )?;
+    conn.execute(
+        "DELETE FROM weekly_data WHERE stage_id = ?1",
+        params![stage_id],
+    )?;
     conn.execute("DELETE FROM stage WHERE id = ?1", params![stage_id])?;
     for (remaining_id, _) in remaining {
         db::recalculate_efficiency_for_stage(&conn, remaining_id)?;
@@ -236,7 +226,10 @@ pub fn category_get(state: State<'_, AppState>, category_id: i64) -> AppResult<V
 #[tauri::command]
 pub fn category_create(state: State<'_, AppState>, payload: CategoryPayload) -> AppResult<Value> {
     let conn = connection(&state)?;
-    conn.execute("INSERT INTO category (name) VALUES (?1)", params![payload.name.trim()])?;
+    conn.execute(
+        "INSERT INTO category (name) VALUES (?1)",
+        params![payload.name.trim()],
+    )?;
     let category_id = conn.last_insert_rowid();
     Ok(json!({
         "success": true,
@@ -246,7 +239,11 @@ pub fn category_create(state: State<'_, AppState>, payload: CategoryPayload) -> 
 }
 
 #[tauri::command]
-pub fn category_update(state: State<'_, AppState>, category_id: i64, payload: CategoryPayload) -> AppResult<Value> {
+pub fn category_update(
+    state: State<'_, AppState>,
+    category_id: i64,
+    payload: CategoryPayload,
+) -> AppResult<Value> {
     let conn = connection(&state)?;
     conn.execute(
         "UPDATE category SET name = ?1 WHERE id = ?2",
@@ -330,7 +327,10 @@ pub fn subcategory_delete(state: State<'_, AppState>, subcategory_id: i64) -> Ap
     if count > 0 {
         return Err(invalid("无法删除该标签，因为它已关联了学习记录"));
     }
-    conn.execute("DELETE FROM sub_category WHERE id = ?1", params![subcategory_id])?;
+    conn.execute(
+        "DELETE FROM sub_category WHERE id = ?1",
+        params![subcategory_id],
+    )?;
     Ok(json!({ "success": true, "message": "子分类已删除" }))
 }
 
@@ -344,15 +344,18 @@ pub fn subcategory_merge(
     if subcategory_id == payload.target_subcategory_id {
         return Err(invalid("不能合并到自身"));
     }
-    let source =
-        subcategory_json_by_id(&conn, subcategory_id)?.ok_or_else(|| invalid("待合并子分类不存在"))?;
+    let source = subcategory_json_by_id(&conn, subcategory_id)?
+        .ok_or_else(|| invalid("待合并子分类不存在"))?;
     let target = subcategory_json_by_id(&conn, payload.target_subcategory_id)?
         .ok_or_else(|| invalid("目标子分类不存在"))?;
     let moved = conn.execute(
         "UPDATE log_entry SET subcategory_id = ?1 WHERE subcategory_id = ?2",
         params![payload.target_subcategory_id, subcategory_id],
     )?;
-    conn.execute("DELETE FROM sub_category WHERE id = ?1", params![subcategory_id])?;
+    conn.execute(
+        "DELETE FROM sub_category WHERE id = ?1",
+        params![subcategory_id],
+    )?;
     Ok(json!({
         "success": true,
         "message": format!("已将标签 \"{}\" 合并到 \"{}\"", source["name"].as_str().unwrap_or(""), target["name"].as_str().unwrap_or("")),
@@ -369,7 +372,8 @@ pub fn records_structured(
     let conn = connection(&state)?;
     let stage = stage_json_by_id(&conn, query.stage_id)?.ok_or_else(|| invalid("阶段不存在"))?;
     let stage_start = db::stage_start_date(&conn, query.stage_id)?;
-    let mut stmt = conn.prepare("SELECT id FROM log_entry WHERE stage_id = ?1 ORDER BY log_date ASC, id ASC")?;
+    let mut stmt =
+        conn.prepare("SELECT id FROM log_entry WHERE stage_id = ?1 ORDER BY log_date ASC, id ASC")?;
     let ids = stmt
         .query_map(params![query.stage_id], |row| row.get::<_, i64>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -497,13 +501,11 @@ pub fn records_list(state: State<'_, AppState>, query: RecordsListQuery) -> AppR
 }
 
 #[tauri::command]
-pub fn records_recent(
-    state: State<'_, AppState>,
-    query: RecentRecordsQuery,
-) -> AppResult<Value> {
+pub fn records_recent(state: State<'_, AppState>, query: RecentRecordsQuery) -> AppResult<Value> {
     let conn = connection(&state)?;
     let limit = query.limit.unwrap_or(10).clamp(1, 50);
-    let mut stmt = conn.prepare("SELECT id FROM log_entry ORDER BY datetime(created_at) DESC LIMIT ?1")?;
+    let mut stmt =
+        conn.prepare("SELECT id FROM log_entry ORDER BY datetime(created_at) DESC LIMIT ?1")?;
     let ids = stmt
         .query_map(params![limit], |row| row.get::<_, i64>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -629,7 +631,9 @@ pub fn record_statistics(state: State<'_, AppState>, query: StatsQuery) -> AppRe
     }
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?)))?
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?))
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let total_records = rows.len() as i64;
     let total_minutes = rows.iter().map(|item| item.0).sum::<i64>();
@@ -651,103 +655,423 @@ pub fn record_statistics(state: State<'_, AppState>, query: StatsQuery) -> AppRe
     }))
 }
 
-fn aggregate_subcategory_metric(
-    conn: &rusqlite::Connection,
-    subcategory_id: i64,
-    stage_id: Option<i64>,
-    start_date: Option<chrono::NaiveDate>,
-    end_date: Option<chrono::NaiveDate>,
-    metric_mode: &str,
-) -> Result<f64> {
-    let mut sql =
-        "SELECT log_date, COALESCE(actual_duration, 0), COALESCE(mood, 3) FROM log_entry WHERE subcategory_id = ?1"
-            .to_string();
-    if let Some(stage_id) = stage_id {
-        sql.push_str(&format!(" AND stage_id = {stage_id}"));
+fn parse_stage_filter(value: Option<&str>) -> Option<i64> {
+    value
+        .filter(|item| !item.is_empty() && *item != "all")
+        .and_then(|item| item.parse::<i64>().ok())
+}
+
+fn normalize_range_mode(value: Option<&str>) -> String {
+    value
+        .map(|item| item.trim().to_lowercase())
+        .filter(|item| !item.is_empty())
+        .unwrap_or_else(|| "all".to_string())
+}
+
+fn parse_optional_date(value: Option<String>) -> AppResult<Option<NaiveDate>> {
+    value
+        .map(|item| db::parse_date(&item).map_err(Into::into))
+        .transpose()
+}
+
+fn stage_date_window(conn: &rusqlite::Connection, stage_id: i64) -> Result<(NaiveDate, NaiveDate)> {
+    let start_date = db::stage_start_date(conn, stage_id)?;
+    let last_log: Option<String> = conn.query_row(
+        "SELECT MAX(log_date) FROM log_entry WHERE stage_id = ?1",
+        params![stage_id],
+        |row| row.get(0),
+    )?;
+    let end_date = last_log
+        .as_deref()
+        .map(db::parse_date)
+        .transpose()?
+        .unwrap_or_else(|| Local::now().date_naive());
+    Ok((start_date, end_date))
+}
+
+fn selected_granularity(
+    range_mode: &str,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    granularity: Option<&str>,
+) -> String {
+    let override_mode = granularity
+        .map(|item| item.trim().to_lowercase())
+        .filter(|item| item == "daily" || item == "weekly");
+    if let Some(mode) = override_mode {
+        return mode;
     }
-    sql.push_str(" ORDER BY log_date ASC");
+    let delta_days = (end_date - start_date).num_days() + 1;
+    if delta_days <= 35 || range_mode == "daily" {
+        "daily".to_string()
+    } else {
+        "weekly".to_string()
+    }
+}
+
+fn zero_filled_duration_series(
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    granularity: &str,
+) -> Value {
+    let days = (0..=(end_date - start_date).num_days())
+        .map(|offset| start_date + Duration::days(offset))
+        .collect::<Vec<_>>();
+    if granularity == "daily" {
+        return json!({
+            "labels": days.iter().map(|day| day.format("%Y-%m-%d").to_string()).collect::<Vec<_>>(),
+            "data": vec![0.0; days.len()],
+            "granularity": "daily",
+            "start": start_date.format("%Y-%m-%d").to_string(),
+            "end": end_date.format("%Y-%m-%d").to_string()
+        });
+    }
+
+    let mut week_map = BTreeMap::<String, f64>::new();
+    for day in days {
+        let week_start = day - Duration::days(day.weekday().num_days_from_monday() as i64);
+        week_map
+            .entry(week_start.format("%Y-%m-%d").to_string())
+            .or_insert(0.0);
+    }
+    json!({
+        "labels": week_map.keys().cloned().collect::<Vec<_>>(),
+        "data": week_map.values().copied().collect::<Vec<_>>(),
+        "granularity": "weekly",
+        "start": start_date.format("%Y-%m-%d").to_string(),
+        "end": end_date.format("%Y-%m-%d").to_string()
+    })
+}
+
+fn prepare_stage_annotations(conn: &rusqlite::Connection) -> Result<Vec<Value>> {
+    let mut stmt =
+        conn.prepare("SELECT id, name, start_date FROM stage ORDER BY start_date ASC")?;
+    let stages = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if stages.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let global_start = db::parse_date(&stages[0].2)?;
+    let last_log: Option<String> =
+        conn.query_row("SELECT MAX(log_date) FROM log_entry", [], |row| row.get(0))?;
+    let last_log_date = last_log
+        .as_deref()
+        .map(db::parse_date)
+        .transpose()?
+        .unwrap_or(global_start);
+
+    let mut annotations = Vec::new();
+    for (index, (_stage_id, name, start_date)) in stages.iter().enumerate() {
+        let stage_start = db::parse_date(start_date)?;
+        let end_date = if let Some((_, _, next_start_date)) = stages.get(index + 1) {
+            db::parse_date(next_start_date)? - Duration::days(1)
+        } else {
+            last_log_date
+        };
+        let (_, _, start_year, start_week) = db::get_custom_week_window(stage_start, global_start);
+        let (_, _, end_year, end_week) = db::get_custom_week_window(end_date, global_start);
+        annotations.push(json!({
+            "name": name,
+            "start_week_label": format!("{start_year}-W{start_week:02}"),
+            "end_week_label": format!("{end_year}-W{end_week:02}")
+        }));
+    }
+    Ok(annotations)
+}
+
+fn category_chart_data_duration(
+    conn: &rusqlite::Connection,
+    stage_id: Option<i64>,
+    start_date: Option<NaiveDate>,
+    end_date: Option<NaiveDate>,
+) -> Result<Option<Value>> {
+    let mut sql = String::from(
+        "SELECT c.name, sc.name, SUM(COALESCE(l.actual_duration, 0))
+         FROM log_entry l
+         JOIN sub_category sc ON l.subcategory_id = sc.id
+         JOIN category c ON sc.category_id = c.id
+         WHERE 1 = 1",
+    );
+    if let Some(stage_id) = stage_id {
+        sql.push_str(&format!(" AND l.stage_id = {stage_id}"));
+    }
+    if let Some(start_date) = start_date {
+        sql.push_str(&format!(
+            " AND l.log_date >= '{}'",
+            start_date.format("%Y-%m-%d")
+        ));
+    }
+    if let Some(end_date) = end_date {
+        sql.push_str(&format!(
+            " AND l.log_date <= '{}'",
+            end_date.format("%Y-%m-%d")
+        ));
+    }
+    sql.push_str(" GROUP BY c.name, sc.name");
+
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map(params![subcategory_id], |row| {
+        .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
-                row.get::<_, i64>(1)?,
+                row.get::<_, String>(1)?,
                 row.get::<_, i64>(2)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    let filtered = rows
-        .into_iter()
-        .filter(|(date, _, _)| {
-            let log_date = db::parse_date(date).ok();
-            match (log_date, start_date, end_date) {
-                (Some(log_date), Some(start), Some(end)) => log_date >= start && log_date <= end,
-                (Some(log_date), Some(start), None) => log_date >= start,
-                (Some(log_date), None, Some(end)) => log_date <= end,
-                (Some(_), None, None) => true,
-                _ => false,
-            }
-        })
-        .collect::<Vec<_>>();
-    if metric_mode == "efficiency" {
-        let total_duration: i64 = filtered.iter().map(|item| item.1).sum();
-        if total_duration == 0 {
-            return Ok(0.0);
+
+    if rows.is_empty() {
+        let mut legacy_sql = String::from(
+            "SELECT legacy_category, SUM(COALESCE(actual_duration, 0))
+             FROM log_entry
+             WHERE legacy_category IS NOT NULL AND legacy_category != ''",
+        );
+        if let Some(stage_id) = stage_id {
+            legacy_sql.push_str(&format!(" AND stage_id = {stage_id}"));
         }
-        let weighted: i64 = filtered.iter().map(|item| item.1 * item.2).sum();
-        let avg_mood = weighted as f64 / total_duration as f64;
-        let total_hours = total_duration as f64 / 60.0;
-        return Ok((avg_mood * (1.0 + total_hours).ln() * 100.0).round() / 100.0);
+        if let Some(start_date) = start_date {
+            legacy_sql.push_str(&format!(
+                " AND log_date >= '{}'",
+                start_date.format("%Y-%m-%d")
+            ));
+        }
+        if let Some(end_date) = end_date {
+            legacy_sql.push_str(&format!(
+                " AND log_date <= '{}'",
+                end_date.format("%Y-%m-%d")
+            ));
+        }
+        legacy_sql.push_str(" GROUP BY legacy_category");
+
+        let mut legacy_stmt = conn.prepare(&legacy_sql)?;
+        let legacy_rows = legacy_stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        if legacy_rows.is_empty() {
+            return Ok(None);
+        }
+        let mut items = legacy_rows
+            .into_iter()
+            .map(|(name, duration)| (name, ((duration as f64 / 60.0) * 100.0).round() / 100.0))
+            .collect::<Vec<_>>();
+        items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        return Ok(Some(json!({
+            "main": {
+                "labels": items.iter().map(|item| item.0.clone()).collect::<Vec<_>>(),
+                "data": items.iter().map(|item| item.1).collect::<Vec<_>>()
+            },
+            "drilldown": {}
+        })));
     }
-    Ok((filtered.iter().map(|item| item.1).sum::<i64>() as f64 / 60.0 * 100.0).round() / 100.0)
+
+    let mut category_totals = HashMap::<String, f64>::new();
+    let mut sub_map = HashMap::<String, Vec<(String, f64)>>::new();
+    for (category_name, sub_name, duration) in rows {
+        let hours = duration as f64 / 60.0;
+        *category_totals.entry(category_name.clone()).or_insert(0.0) += hours;
+        sub_map
+            .entry(category_name)
+            .or_default()
+            .push((sub_name, (hours * 100.0).round() / 100.0));
+    }
+
+    let mut sorted_categories = category_totals.into_iter().collect::<Vec<_>>();
+    sorted_categories.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut drilldown = serde_json::Map::new();
+    for (category_name, _) in &sorted_categories {
+        if let Some(subs) = sub_map.get_mut(category_name) {
+            subs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            drilldown.insert(
+                category_name.clone(),
+                json!({
+                    "labels": subs.iter().map(|item| item.0.clone()).collect::<Vec<_>>(),
+                    "data": subs.iter().map(|item| item.1).collect::<Vec<_>>()
+                }),
+            );
+        }
+    }
+
+    Ok(Some(json!({
+        "main": {
+            "labels": sorted_categories.iter().map(|item| item.0.clone()).collect::<Vec<_>>(),
+            "data": sorted_categories.iter().map(|item| (item.1 * 100.0).round() / 100.0).collect::<Vec<_>>()
+        },
+        "drilldown": drilldown
+    })))
 }
 
-fn category_chart_data(
+fn category_chart_data_efficiency(
     conn: &rusqlite::Connection,
     stage_id: Option<i64>,
-    start_date: Option<chrono::NaiveDate>,
-    end_date: Option<chrono::NaiveDate>,
-    metric_mode: &str,
-) -> Result<Value> {
-    let categories = categories_json(conn, true)?;
-    let mut main_labels = Vec::new();
-    let mut main_data = Vec::new();
-    let mut drilldown = serde_json::Map::new();
-    for category in categories {
-        let category_name = category["name"].as_str().unwrap_or_default().to_string();
-        let mut sub_labels = Vec::new();
-        let mut sub_values = Vec::new();
-        let mut total = 0.0_f64;
-        for sub in category["subcategories"].as_array().cloned().unwrap_or_default() {
-            let sub_id = sub["id"].as_i64().unwrap_or_default();
-            let value = aggregate_subcategory_metric(conn, sub_id, stage_id, start_date, end_date, metric_mode)?;
-            if value > 0.0 {
-                sub_labels.push(sub["name"].as_str().unwrap_or_default().to_string());
-                sub_values.push(value);
-                total += value;
-            }
+    start_date: Option<NaiveDate>,
+    end_date: Option<NaiveDate>,
+) -> Result<Option<Value>> {
+    let mut sql = String::from(
+        "SELECT c.name, sc.name, l.log_date,
+                SUM(COALESCE(l.actual_duration, 0)),
+                SUM(COALESCE(l.actual_duration, 0) * COALESCE(l.mood, 3))
+         FROM log_entry l
+         JOIN sub_category sc ON l.subcategory_id = sc.id
+         JOIN category c ON sc.category_id = c.id
+         WHERE 1 = 1",
+    );
+    if let Some(stage_id) = stage_id {
+        sql.push_str(&format!(" AND l.stage_id = {stage_id}"));
+    }
+    if let Some(start_date) = start_date {
+        sql.push_str(&format!(
+            " AND l.log_date >= '{}'",
+            start_date.format("%Y-%m-%d")
+        ));
+    }
+    if let Some(end_date) = end_date {
+        sql.push_str(&format!(
+            " AND l.log_date <= '{}'",
+            end_date.format("%Y-%m-%d")
+        ));
+    }
+    sql.push_str(" GROUP BY c.name, sc.name, l.log_date");
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    if rows.is_empty() {
+        let mut legacy_sql = String::from(
+            "SELECT legacy_category, log_date,
+                    SUM(COALESCE(actual_duration, 0)),
+                    SUM(COALESCE(actual_duration, 0) * COALESCE(mood, 3))
+             FROM log_entry
+             WHERE legacy_category IS NOT NULL AND legacy_category != ''",
+        );
+        if let Some(stage_id) = stage_id {
+            legacy_sql.push_str(&format!(" AND stage_id = {stage_id}"));
         }
-        if total > 0.0 {
-            main_labels.push(category_name.clone());
-            main_data.push((total * 100.0).round() / 100.0);
-            drilldown.insert(category_name, json!({ "labels": sub_labels, "data": sub_values }));
+        if let Some(start_date) = start_date {
+            legacy_sql.push_str(&format!(
+                " AND log_date >= '{}'",
+                start_date.format("%Y-%m-%d")
+            ));
+        }
+        if let Some(end_date) = end_date {
+            legacy_sql.push_str(&format!(
+                " AND log_date <= '{}'",
+                end_date.format("%Y-%m-%d")
+            ));
+        }
+        legacy_sql.push_str(" GROUP BY legacy_category, log_date");
+
+        let mut legacy_stmt = conn.prepare(&legacy_sql)?;
+        let legacy_rows = legacy_stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        if legacy_rows.is_empty() {
+            return Ok(None);
+        }
+
+        let mut legacy_totals = HashMap::<String, f64>::new();
+        for (name, _date, duration, weighted_mood) in legacy_rows {
+            if duration <= 0 {
+                continue;
+            }
+            let hours = duration as f64 / 60.0;
+            let avg_mood = weighted_mood as f64 / duration as f64;
+            *legacy_totals.entry(name).or_insert(0.0) += avg_mood * (1.0 + hours).ln();
+        }
+        let mut items = legacy_totals
+            .into_iter()
+            .map(|(name, value)| (name, (value * 100.0).round() / 100.0))
+            .collect::<Vec<_>>();
+        items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        return Ok(Some(json!({
+            "main": {
+                "labels": items.iter().map(|item| item.0.clone()).collect::<Vec<_>>(),
+                "data": items.iter().map(|item| item.1).collect::<Vec<_>>()
+            },
+            "drilldown": {}
+        })));
+    }
+
+    let mut category_totals = HashMap::<String, f64>::new();
+    let mut sub_totals = HashMap::<String, HashMap<String, f64>>::new();
+    for (category_name, sub_name, _log_date, duration, weighted_mood) in rows {
+        if duration <= 0 {
+            continue;
+        }
+        let hours = duration as f64 / 60.0;
+        let avg_mood = weighted_mood as f64 / duration as f64;
+        let daily_efficiency = avg_mood * (1.0 + hours).ln();
+        *category_totals.entry(category_name.clone()).or_insert(0.0) += daily_efficiency;
+        *sub_totals
+            .entry(category_name)
+            .or_default()
+            .entry(sub_name)
+            .or_insert(0.0) += daily_efficiency;
+    }
+
+    let mut sorted_categories = category_totals.into_iter().collect::<Vec<_>>();
+    sorted_categories.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut drilldown = serde_json::Map::new();
+    for (category_name, _) in &sorted_categories {
+        if let Some(subs) = sub_totals.get(category_name) {
+            let mut sorted_subs = subs
+                .iter()
+                .map(|(name, value)| (name.clone(), (value * 100.0).round() / 100.0))
+                .collect::<Vec<_>>();
+            sorted_subs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            drilldown.insert(
+                category_name.clone(),
+                json!({
+                    "labels": sorted_subs.iter().map(|item| item.0.clone()).collect::<Vec<_>>(),
+                    "data": sorted_subs.iter().map(|item| item.1).collect::<Vec<_>>()
+                }),
+            );
         }
     }
-    Ok(json!({
-        "main": { "labels": main_labels, "data": main_data },
+
+    Ok(Some(json!({
+        "main": {
+            "labels": sorted_categories.iter().map(|item| item.0.clone()).collect::<Vec<_>>(),
+            "data": sorted_categories.iter().map(|item| (item.1 * 100.0).round() / 100.0).collect::<Vec<_>>()
+        },
         "drilldown": drilldown
-    }))
+    })))
 }
 
 #[tauri::command]
 pub fn charts_overview(state: State<'_, AppState>, query: ChartsOverviewQuery) -> AppResult<Value> {
     let conn = connection(&state)?;
-    let stage_id = query
-        .stage_id
-        .filter(|item| item != "all" && !item.is_empty())
-        .and_then(|item| item.parse::<i64>().ok());
-    let (weekly_labels, weekly_duration, weekly_efficiency) = labels_for_weekly(&conn, stage_id)?;
-    let (daily_labels, daily_duration, daily_efficiency) = labels_for_daily(&conn, stage_id)?;
+    let _ = (&query.view, &query.stage_id);
+    let (weekly_labels, weekly_duration, weekly_efficiency) = labels_for_weekly(&conn, None)?;
+    let (daily_labels, daily_duration, daily_efficiency) = labels_for_daily(&conn, None)?;
     let avg_daily_minutes = if daily_duration.is_empty() {
         0
     } else {
@@ -797,27 +1121,34 @@ pub fn charts_overview(state: State<'_, AppState>, query: ChartsOverviewQuery) -
             "ongoing_value": Value::Null,
             "forecast": { "available": false, "status": "unavailable", "reason": "桌面端当前版本未启用本地趋势预测", "labels": [], "prediction": [], "lower": [], "upper": [] }
         },
-        "stage_annotations": stages_json(&conn)?,
+        "stage_annotations": prepare_stage_annotations(&conn)?,
         "forecast_status": { "state": "unavailable", "signature": Value::Null, "message": "桌面端当前版本未启用本地趋势预测", "updated_at": Value::Null, "trained_for_date": Value::Null }
     }))
 }
 
 #[tauri::command]
-pub fn charts_categories(state: State<'_, AppState>, query: ChartsCategoryQuery) -> AppResult<Value> {
+pub fn charts_categories(
+    state: State<'_, AppState>,
+    query: ChartsCategoryQuery,
+) -> AppResult<Value> {
     let conn = connection(&state)?;
-    let stage_id = query
-        .stage_id
-        .filter(|item| item != "all" && !item.is_empty())
-        .and_then(|item| item.parse::<i64>().ok());
-    let _ = query.range_mode;
-    let data = category_chart_data(
-        &conn,
-        stage_id,
-        query.start_date.map(|v| db::parse_date(&v)).transpose()?,
-        query.end_date.map(|v| db::parse_date(&v)).transpose()?,
-        query.metric_mode.as_deref().unwrap_or("duration"),
-    )?;
-    Ok(data)
+    let _ = &query.range_mode;
+    let stage_id = parse_stage_filter(query.stage_id.as_deref());
+    let start_date = parse_optional_date(query.start_date)?;
+    let end_date = parse_optional_date(query.end_date)?;
+    let metric_mode = query.metric_mode.unwrap_or_else(|| "duration".to_string());
+    let data = if metric_mode == "efficiency" {
+        category_chart_data_efficiency(&conn, stage_id, start_date, end_date)?
+    } else {
+        category_chart_data_duration(&conn, stage_id, start_date, end_date)?
+    };
+
+    Ok(data.unwrap_or_else(|| {
+        json!({
+            "main": { "labels": Vec::<String>::new(), "data": Vec::<f64>::new() },
+            "drilldown": {}
+        })
+    }))
 }
 
 #[tauri::command]
@@ -826,88 +1157,223 @@ pub fn charts_category_trend(
     query: CategoryTrendQuery,
 ) -> AppResult<Value> {
     let conn = connection(&state)?;
-    let granularity = query.granularity.unwrap_or_else(|| "daily".to_string());
     let metric_mode = query.metric_mode.unwrap_or_else(|| "duration".to_string());
-    let start_date = query.start_date.map(|v| db::parse_date(&v)).transpose()?;
-    let end_date = query.end_date.map(|v| db::parse_date(&v)).transpose()?;
-    let mut map = BTreeMap::<String, f64>::new();
+    let range_mode = normalize_range_mode(query.range_mode.as_deref());
+    let stage_id = parse_stage_filter(query.stage_id.as_deref());
+    let mut start_date = parse_optional_date(query.start_date)?;
+    let mut end_date = parse_optional_date(query.end_date)?;
 
-    let subcategory_ids = if let Some(subcategory_id) = query.subcategory_id {
-        vec![subcategory_id]
-    } else if let Some(category_id) = query.category_id {
-        let mut stmt =
-            conn.prepare("SELECT id FROM sub_category WHERE category_id = ?1 ORDER BY name ASC")?;
-        let ids = stmt
-            .query_map(params![category_id], |row| row.get::<_, i64>(0))?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        ids
-    } else {
-        let mut stmt = conn.prepare("SELECT id FROM sub_category ORDER BY name ASC")?;
-        let ids = stmt
-            .query_map([], |row| row.get::<_, i64>(0))?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        ids
-    };
-
-    for subcategory_id in subcategory_ids {
-        let mut sql =
-            "SELECT log_date, COALESCE(actual_duration, 0), COALESCE(mood, 3) FROM log_entry WHERE subcategory_id = ?1"
-                .to_string();
-        if let Some(stage_id) = query.stage_id {
-            sql.push_str(&format!(" AND stage_id = {stage_id}"));
+    let base_rows = if metric_mode == "efficiency" {
+        let mut sql = String::from(
+            "SELECT l.log_date,
+                    SUM(COALESCE(l.actual_duration, 0)),
+                    SUM(COALESCE(l.actual_duration, 0) * COALESCE(l.mood, 3))
+             FROM log_entry l
+             WHERE 1 = 1",
+        );
+        if let Some(subcategory_id) = query.subcategory_id {
+            sql.push_str(&format!(" AND l.subcategory_id = {subcategory_id}"));
+        } else if let Some(category_id) = query.category_id {
+            sql.push_str(
+                " AND l.subcategory_id IN (SELECT id FROM sub_category WHERE category_id = ",
+            );
+            sql.push_str(&category_id.to_string());
+            sql.push(')');
         }
-        sql.push_str(" ORDER BY log_date ASC");
+        if let Some(stage_id) = stage_id {
+            sql.push_str(&format!(" AND l.stage_id = {stage_id}"));
+        }
+        sql.push_str(" GROUP BY l.log_date ORDER BY l.log_date ASC");
+
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt
-            .query_map(params![subcategory_id], |row| {
+            .query_map([], |row| {
                 Ok((
-                    row.get::<_, String>(0)?,
+                    db::parse_date(&row.get::<_, String>(0)?)
+                        .map_err(|_| rusqlite::Error::InvalidQuery)?,
                     row.get::<_, i64>(1)?,
                     row.get::<_, i64>(2)?,
                 ))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        for (log_date_str, duration, mood) in rows {
-            let log_date = db::parse_date(&log_date_str)?;
-            if start_date.is_some_and(|start| log_date < start) {
-                continue;
-            }
-            if end_date.is_some_and(|end| log_date > end) {
-                continue;
-            }
-            let label = if granularity == "weekly" {
-                if let Some(stage_id) = query.stage_id {
-                    let stage_start = db::stage_start_date(&conn, stage_id)?;
-                    let (_, _, year, week_num) = db::get_custom_week_window(log_date, stage_start);
-                    format!("{year} W{week_num:02}")
+        rows.into_iter()
+            .map(|(date, duration, weighted_mood)| {
+                let value = if duration <= 0 {
+                    0.0
                 } else {
-                    let iso = log_date.iso_week();
-                    format!("{} W{:02}", iso.year(), iso.week())
-                }
-            } else {
-                log_date_str.clone()
-            };
-            let value = if metric_mode == "efficiency" {
-                let hours = duration as f64 / 60.0;
-                mood as f64 * (1.0 + hours).ln()
-            } else {
-                duration as f64 / 60.0
-            };
-            *map.entry(label).or_insert(0.0) += value;
+                    let hours = duration as f64 / 60.0;
+                    let avg_mood = weighted_mood as f64 / duration as f64;
+                    avg_mood * (1.0 + hours).ln()
+                };
+                (date, value)
+            })
+            .collect::<Vec<_>>()
+    } else {
+        let mut sql = String::from(
+            "SELECT l.log_date, SUM(COALESCE(l.actual_duration, 0))
+             FROM log_entry l
+             WHERE 1 = 1",
+        );
+        if let Some(subcategory_id) = query.subcategory_id {
+            sql.push_str(&format!(" AND l.subcategory_id = {subcategory_id}"));
+        } else if let Some(category_id) = query.category_id {
+            sql.push_str(
+                " AND l.subcategory_id IN (SELECT id FROM sub_category WHERE category_id = ",
+            );
+            sql.push_str(&category_id.to_string());
+            sql.push(')');
+        }
+        if let Some(stage_id) = stage_id {
+            sql.push_str(&format!(" AND l.stage_id = {stage_id}"));
+        }
+        sql.push_str(" GROUP BY l.log_date ORDER BY l.log_date ASC");
+
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    db::parse_date(&row.get::<_, String>(0)?)
+                        .map_err(|_| rusqlite::Error::InvalidQuery)?,
+                    row.get::<_, i64>(1)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        rows.into_iter()
+            .map(|(date, duration)| (date, duration as f64 / 60.0))
+            .collect::<Vec<_>>()
+    };
+
+    if start_date.is_none() || end_date.is_none() {
+        if range_mode == "stage" {
+            if let Some(stage_id) = stage_id {
+                let (stage_start, stage_end) = stage_date_window(&conn, stage_id)?;
+                start_date = start_date.or(Some(stage_start));
+                end_date = end_date.or(Some(stage_end));
+            }
+        } else if range_mode == "all" {
+            start_date = start_date.or_else(|| base_rows.first().map(|item| item.0));
+            end_date = end_date.or_else(|| base_rows.last().map(|item| item.0));
         }
     }
 
-    let labels = map.keys().cloned().collect::<Vec<_>>();
-    let data = map
-        .values()
-        .map(|item| (item * 100.0).round() / 100.0)
+    let today = Local::now().date_naive();
+    let mut start_date = start_date.unwrap_or_else(|| {
+        end_date
+            .unwrap_or(today)
+            .checked_sub_signed(Duration::weeks(11))
+            .unwrap_or(today)
+    });
+    let mut end_date = end_date.unwrap_or(today);
+    if start_date > end_date {
+        std::mem::swap(&mut start_date, &mut end_date);
+    }
+
+    let mut used_legacy_name: Option<String> = None;
+    let mut filtered_rows = base_rows
+        .into_iter()
+        .filter(|(date, _)| *date >= start_date && *date <= end_date)
         .collect::<Vec<_>>();
+
+    if filtered_rows.is_empty() && metric_mode != "efficiency" {
+        if let Some(category_id) = query.category_id {
+            let category_name: Option<String> = conn
+                .query_row(
+                    "SELECT name FROM category WHERE id = ?1",
+                    params![category_id],
+                    |row| row.get(0),
+                )
+                .ok();
+            if let Some(category_name) = category_name {
+                used_legacy_name = Some(category_name.clone());
+                let mut legacy_sql = String::from(
+                    "SELECT log_date, SUM(COALESCE(actual_duration, 0))
+                     FROM log_entry
+                     WHERE legacy_category = ?1",
+                );
+                if let Some(stage_id) = stage_id {
+                    legacy_sql.push_str(&format!(" AND stage_id = {stage_id}"));
+                }
+                legacy_sql.push_str(&format!(
+                    " AND log_date >= '{}' AND log_date <= '{}'",
+                    start_date.format("%Y-%m-%d"),
+                    end_date.format("%Y-%m-%d")
+                ));
+                legacy_sql.push_str(" GROUP BY log_date ORDER BY log_date ASC");
+                let mut legacy_stmt = conn.prepare(&legacy_sql)?;
+                filtered_rows = legacy_stmt
+                    .query_map(params![category_name], |row| {
+                        Ok((
+                            db::parse_date(&row.get::<_, String>(0)?)
+                                .map_err(|_| rusqlite::Error::InvalidQuery)?,
+                            row.get::<_, i64>(1)? as f64 / 60.0,
+                        ))
+                    })?
+                    .collect::<rusqlite::Result<Vec<_>>>()?;
+            }
+        }
+    }
+
+    let granularity = selected_granularity(
+        &range_mode,
+        start_date,
+        end_date,
+        query.granularity.as_deref(),
+    );
+
+    if filtered_rows.is_empty() {
+        let mut payload = zero_filled_duration_series(start_date, end_date, &granularity);
+        if let Some(legacy_name) = used_legacy_name {
+            payload["legacy_name"] = json!(legacy_name);
+        }
+        return Ok(json!({ "success": true, "data": payload }));
+    }
+
+    let days = (0..=(end_date - start_date).num_days())
+        .map(|offset| start_date + Duration::days(offset))
+        .collect::<Vec<_>>();
+    let day_map = filtered_rows
+        .into_iter()
+        .map(|(date, value)| (date, (value * 100.0).round() / 100.0))
+        .collect::<BTreeMap<_, _>>();
+
+    let payload = if granularity == "daily" {
+        json!({
+            "labels": days.iter().map(|day| day.format("%Y-%m-%d").to_string()).collect::<Vec<_>>(),
+            "data": days.iter().map(|day| day_map.get(day).copied().unwrap_or(0.0)).collect::<Vec<_>>(),
+            "granularity": "daily",
+            "start": start_date.format("%Y-%m-%d").to_string(),
+            "end": end_date.format("%Y-%m-%d").to_string()
+        })
+    } else {
+        let mut week_map = BTreeMap::<String, f64>::new();
+        for day in days {
+            let week_start = day - Duration::days(day.weekday().num_days_from_monday() as i64);
+            let key = week_start.format("%Y-%m-%d").to_string();
+            let value = day_map.get(&day).copied().unwrap_or(0.0);
+            *week_map.entry(key).or_insert(0.0) += value;
+        }
+        json!({
+            "labels": week_map.keys().cloned().collect::<Vec<_>>(),
+            "data": week_map.values().map(|item| (item * 100.0).round() / 100.0).collect::<Vec<_>>(),
+            "granularity": "weekly",
+            "start": start_date.format("%Y-%m-%d").to_string(),
+            "end": end_date.format("%Y-%m-%d").to_string()
+        })
+    };
+
+    let mut payload = payload;
+    if let Some(legacy_name) = used_legacy_name {
+        payload["legacy_name"] = json!(legacy_name);
+    }
     Ok(json!({
         "success": true,
         "data": {
-            "labels": labels,
-            "data": data,
-            "granularity": granularity
+            "labels": payload["labels"].clone(),
+            "data": payload["data"].clone(),
+            "granularity": payload["granularity"].clone(),
+            "start": payload["start"].clone(),
+            "end": payload["end"].clone(),
+            "legacy_name": payload.get("legacy_name").cloned().unwrap_or(Value::Null),
         }
     }))
 }

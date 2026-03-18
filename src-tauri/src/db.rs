@@ -183,7 +183,7 @@ pub fn default_mottos() -> [&'static str; 7] {
         "少壮不努力,老大徒伤悲。",
         "吾生也有涯,而知也无涯。",
         "天行健,君子以自强不息。",
-        "明日复明日,明日何其多。我生待明日,万事成蹉跎。"
+        "明日复明日,明日何其多。我生待明日,万事成蹉跎。",
     ]
 }
 
@@ -241,7 +241,10 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn stage_for_date(conn: &Connection, log_date: NaiveDate) -> Result<Option<(i64, String, NaiveDate)>> {
+pub fn stage_for_date(
+    conn: &Connection,
+    log_date: NaiveDate,
+) -> Result<Option<(i64, String, NaiveDate)>> {
     conn.query_row(
         "SELECT id, name, start_date FROM stage WHERE start_date <= ?1 ORDER BY start_date DESC LIMIT 1",
         params![log_date.format("%Y-%m-%d").to_string()],
@@ -279,9 +282,13 @@ pub fn next_stage_start(conn: &Connection, stage_id: i64) -> Result<Option<Naive
     value.map(|item| parse_date(&item)).transpose()
 }
 
-pub fn get_custom_week_window(log_date: NaiveDate, start_date: NaiveDate) -> (NaiveDate, NaiveDate, i32, i32) {
+pub fn get_custom_week_window(
+    log_date: NaiveDate,
+    start_date: NaiveDate,
+) -> (NaiveDate, NaiveDate, i32, i32) {
     if log_date < start_date {
-        let first_week_end = start_date + Duration::days(((6 - start_date.weekday().num_days_from_monday()) % 7) as i64);
+        let first_week_end = start_date
+            + Duration::days(((6 - start_date.weekday().num_days_from_monday()) % 7) as i64);
         return (start_date, first_week_end, start_date.year(), 1);
     }
 
@@ -293,7 +300,8 @@ pub fn get_custom_week_window(log_date: NaiveDate, start_date: NaiveDate) -> (Na
         return (week_start, week_end, week_start.year(), week_num);
     }
 
-    let first_week_end = start_date + Duration::days((6 - start_date.weekday().num_days_from_monday()) as i64);
+    let first_week_end =
+        start_date + Duration::days((6 - start_date.weekday().num_days_from_monday()) as i64);
     if log_date <= first_week_end {
         return (start_date, first_week_end, start_date.year(), 1);
     }
@@ -331,7 +339,9 @@ pub fn ensure_log_stage_consistency(conn: &Connection) -> Result<()> {
     let mut touched = Vec::new();
     for (log_id, log_date_str) in logs {
         let log_date = parse_date(&log_date_str)?;
-        let target_stage = stages.iter().find(|(_, start)| parse_date(start).map(|d| d <= log_date).unwrap_or(false));
+        let target_stage = stages
+            .iter()
+            .find(|(_, start)| parse_date(start).map(|d| d <= log_date).unwrap_or(false));
         if let Some((stage_id, _)) = target_stage {
             conn.execute(
                 "UPDATE log_entry SET stage_id = ?1 WHERE id = ?2 AND stage_id != ?1",
@@ -356,8 +366,14 @@ pub fn recalculate_efficiency_for_stage(conn: &Connection, stage_id: i64) -> Res
         .map(|d| d - Duration::days(1))
         .unwrap_or_else(|| Local::now().date_naive());
 
-    conn.execute("DELETE FROM daily_data WHERE stage_id = ?1", params![stage_id])?;
-    conn.execute("DELETE FROM weekly_data WHERE stage_id = ?1", params![stage_id])?;
+    conn.execute(
+        "DELETE FROM daily_data WHERE stage_id = ?1",
+        params![stage_id],
+    )?;
+    conn.execute(
+        "DELETE FROM weekly_data WHERE stage_id = ?1",
+        params![stage_id],
+    )?;
 
     let mut stmt = conn.prepare(
         "SELECT DISTINCT log_date FROM log_entry WHERE stage_id = ?1 ORDER BY log_date ASC",
@@ -389,9 +405,17 @@ pub fn recalculate_efficiency_for_stage(conn: &Connection, stage_id: i64) -> Res
     }
 
     for (year, week_num, week_start, week_end) in seen_weeks {
-        let effective_start = if week_start < stage_start { stage_start } else { week_start };
+        let effective_start = if week_start < stage_start {
+            stage_start
+        } else {
+            week_start
+        };
         let today = Local::now().date_naive();
-        let mut effective_end = if week_end > stage_end { stage_end } else { week_end };
+        let mut effective_end = if week_end > stage_end {
+            stage_end
+        } else {
+            week_end
+        };
         if effective_end > today {
             effective_end = today;
         }
@@ -424,7 +448,11 @@ pub fn recalculate_efficiency_for_stage(conn: &Connection, stage_id: i64) -> Res
     Ok(())
 }
 
-pub fn update_efficiency_for_date(conn: &Connection, stage_id: i64, log_date: NaiveDate) -> Result<()> {
+pub fn update_efficiency_for_date(
+    conn: &Connection,
+    stage_id: i64,
+    log_date: NaiveDate,
+) -> Result<()> {
     let score = calculate_daily_efficiency(conn, stage_id, log_date)?;
     conn.execute(
         "INSERT INTO daily_data (log_date, efficiency, stage_id) VALUES (?1, ?2, ?3)
@@ -438,9 +466,17 @@ pub fn update_efficiency_for_date(conn: &Connection, stage_id: i64, log_date: Na
         .map(|d| d - Duration::days(1))
         .unwrap_or_else(|| Local::now().date_naive());
     let (week_start, week_end, year, week_num) = get_custom_week_window(log_date, stage_start);
-    let effective_start = if week_start < stage_start { stage_start } else { week_start };
+    let effective_start = if week_start < stage_start {
+        stage_start
+    } else {
+        week_start
+    };
     let effective_end = {
-        let mut end = if week_end > stage_end { stage_end } else { week_end };
+        let mut end = if week_end > stage_end {
+            stage_end
+        } else {
+            week_end
+        };
         let today = Local::now().date_naive();
         if end > today {
             end = today;
@@ -474,14 +510,23 @@ pub fn update_efficiency_for_date(conn: &Connection, stage_id: i64, log_date: Na
     Ok(())
 }
 
-pub fn calculate_daily_efficiency(conn: &Connection, stage_id: i64, log_date: NaiveDate) -> Result<f64> {
+pub fn calculate_daily_efficiency(
+    conn: &Connection,
+    stage_id: i64,
+    log_date: NaiveDate,
+) -> Result<f64> {
     let mut stmt = conn.prepare(
         "SELECT actual_duration, COALESCE(mood, 3) FROM log_entry WHERE stage_id = ?1 AND log_date = ?2",
     )?;
     let rows = stmt
         .query_map(
             params![stage_id, log_date.format("%Y-%m-%d").to_string()],
-            |row| Ok((row.get::<_, Option<i64>>(0)?.unwrap_or(0), row.get::<_, i64>(1)?)),
+            |row| {
+                Ok((
+                    row.get::<_, Option<i64>>(0)?.unwrap_or(0),
+                    row.get::<_, i64>(1)?,
+                ))
+            },
         )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 

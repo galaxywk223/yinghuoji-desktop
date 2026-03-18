@@ -41,7 +41,9 @@ pub fn profile_json(conn: &Connection) -> Result<Value> {
 pub fn settings_json(conn: &Connection) -> Result<Value> {
     let mut stmt = conn.prepare("SELECT key, value FROM app_setting ORDER BY key ASC")?;
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut map = serde_json::Map::new();
     for (key, value) in rows {
@@ -72,9 +74,8 @@ pub fn stage_json_by_id(conn: &Connection, stage_id: i64) -> Result<Option<Value
 }
 
 pub fn stages_json(conn: &Connection) -> Result<Vec<Value>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, start_date FROM stage ORDER BY start_date DESC, id DESC",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, name, start_date FROM stage ORDER BY start_date DESC, id DESC")?;
     let items = stmt
         .query_map([], |row| {
             Ok(json!({
@@ -91,7 +92,9 @@ pub fn stages_json(conn: &Connection) -> Result<Vec<Value>> {
 pub fn categories_json(conn: &Connection, include_subcategories: bool) -> Result<Vec<Value>> {
     let mut stmt = conn.prepare("SELECT id, name FROM category ORDER BY name ASC")?;
     let categories = stmt
-        .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut result = Vec::new();
     for (category_id, name) in categories {
@@ -224,7 +227,8 @@ pub fn moving_average_points(values: &[f64]) -> Vec<Value> {
 }
 
 pub fn recent_records_json(conn: &Connection, limit: i64) -> Result<Vec<Value>> {
-    let mut stmt = conn.prepare("SELECT id FROM log_entry ORDER BY datetime(created_at) DESC LIMIT ?1")?;
+    let mut stmt =
+        conn.prepare("SELECT id FROM log_entry ORDER BY datetime(created_at) DESC LIMIT ?1")?;
     let ids = stmt
         .query_map(params![limit], |row| row.get::<_, i64>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -271,7 +275,8 @@ pub fn ai_config(conn: &Connection) -> Result<AiConfigView> {
         .unwrap_or_default();
     Ok(AiConfigView {
         configured: !api_key.is_empty(),
-        enabled: db::get_setting(conn, "ai_enabled")?.unwrap_or_else(|| "true".to_string()) == "true",
+        enabled: db::get_setting(conn, "ai_enabled")?.unwrap_or_else(|| "true".to_string())
+            == "true",
         model_name: db::get_setting(conn, "ai_model_name")?
             .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)))
             .unwrap_or_else(|| "qwen-plus-2025-07-28".to_string()),
@@ -282,7 +287,10 @@ pub fn ai_config(conn: &Connection) -> Result<AiConfigView> {
     })
 }
 
-pub fn labels_for_daily(conn: &Connection, stage_id: Option<i64>) -> Result<(Vec<String>, Vec<f64>, Vec<f64>)> {
+pub fn labels_for_daily(
+    conn: &Connection,
+    stage_id: Option<i64>,
+) -> Result<(Vec<String>, Vec<f64>, Vec<f64>)> {
     let mut duration_map = BTreeMap::<String, i64>::new();
     let mut efficiency_map = BTreeMap::<String, f64>::new();
     let (sql, params_box): (&str, Vec<i64>) = if let Some(stage_id) = stage_id {
@@ -299,14 +307,21 @@ pub fn labels_for_daily(conn: &Connection, stage_id: Option<i64>) -> Result<(Vec
 
     let mut stmt = conn.prepare(sql)?;
     let logs = if params_box.is_empty() {
-        stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
-            .collect::<rusqlite::Result<Vec<_>>>()?
+        stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?
     } else {
-        stmt.query_map(params![params_box[0]], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
-            .collect::<rusqlite::Result<Vec<_>>>()?
+        stmt.query_map(params![params_box[0]], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?
     };
     for (log_date, duration) in logs {
         *duration_map.entry(log_date).or_insert(0) += duration;
+    }
+    if duration_map.is_empty() {
+        return Ok((Vec::new(), Vec::new(), Vec::new()));
     }
 
     let (eff_sql, eff_params): (&str, Vec<i64>) = if let Some(stage_id) = stage_id {
@@ -322,10 +337,16 @@ pub fn labels_for_daily(conn: &Connection, stage_id: Option<i64>) -> Result<(Vec
     };
     let mut eff_stmt = conn.prepare(eff_sql)?;
     let rows = if eff_params.is_empty() {
-        eff_stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?)))?
+        eff_stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+            })?
             .collect::<rusqlite::Result<Vec<_>>>()?
     } else {
-        eff_stmt.query_map(params![eff_params[0]], |row| Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?)))?
+        eff_stmt
+            .query_map(params![eff_params[0]], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+            })?
             .collect::<rusqlite::Result<Vec<_>>>()?
     };
     let mut grouped = BTreeMap::<String, Vec<f64>>::new();
@@ -333,14 +354,36 @@ pub fn labels_for_daily(conn: &Connection, stage_id: Option<i64>) -> Result<(Vec
         grouped.entry(log_date).or_default().push(score);
     }
     for (date, scores) in grouped {
-        let avg = if scores.is_empty() { 0.0 } else { scores.iter().sum::<f64>() / scores.len() as f64 };
+        let avg = if scores.is_empty() {
+            0.0
+        } else {
+            scores.iter().sum::<f64>() / scores.len() as f64
+        };
         efficiency_map.insert(date, avg);
     }
 
-    let labels = duration_map.keys().cloned().collect::<Vec<_>>();
+    let first_date = duration_map
+        .keys()
+        .next()
+        .and_then(|item| db::parse_date(item).ok())
+        .ok_or_else(|| anyhow!("无法解析首条学习记录日期"))?;
+    let last_date = duration_map
+        .keys()
+        .next_back()
+        .and_then(|item| db::parse_date(item).ok())
+        .ok_or_else(|| anyhow!("无法解析末条学习记录日期"))?;
+    let labels = (0..=(last_date - first_date).num_days())
+        .map(|offset| {
+            (first_date + chrono::Duration::days(offset))
+                .format("%Y-%m-%d")
+                .to_string()
+        })
+        .collect::<Vec<_>>();
     let duration = labels
         .iter()
-        .map(|label| (duration_map.get(label).copied().unwrap_or(0) as f64 / 60.0 * 10.0).round() / 10.0)
+        .map(|label| {
+            (duration_map.get(label).copied().unwrap_or(0) as f64 / 60.0 * 10.0).round() / 10.0
+        })
         .collect::<Vec<_>>();
     let efficiency = labels
         .iter()

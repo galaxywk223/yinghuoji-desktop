@@ -24,9 +24,7 @@ fn read_json_entry(
     let entry_name = (0..archive.len()).find_map(|index| {
         let file = archive.by_index(index).ok()?;
         let candidate = file.name().replace('\\', "/");
-        if candidate == normalized_target
-            || candidate.ends_with(&format!("/{normalized_target}"))
-        {
+        if candidate == normalized_target || candidate.ends_with(&format!("/{normalized_target}")) {
             Some(file.name().to_string())
         } else {
             None
@@ -49,8 +47,7 @@ fn read_json_entry(
 fn is_attachment_entry(name: &str) -> bool {
     let normalized = name.replace('\\', "/");
     !normalized.ends_with('/')
-        && (normalized.starts_with("attachments/")
-            || normalized.contains("/attachments/"))
+        && (normalized.starts_with("attachments/") || normalized.contains("/attachments/"))
 }
 
 fn value_as_i64(value: &Value) -> Option<i64> {
@@ -148,15 +145,17 @@ pub fn backup_export_zip(state: State<'_, AppState>) -> AppResult<Value> {
         .collect::<Vec<_>>();
     let categories = categories_json(&conn, false)?;
     let subcategories = {
-        let mut stmt = conn.prepare("SELECT id, name, category_id FROM sub_category ORDER BY id ASC")?;
-        let items = stmt.query_map([], |row| {
-            Ok(json!({
-                "id": row.get::<_, i64>(0)?,
-                "name": row.get::<_, String>(1)?,
-                "category_id": row.get::<_, i64>(2)?
-            }))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut stmt =
+            conn.prepare("SELECT id, name, category_id FROM sub_category ORDER BY id ASC")?;
+        let items = stmt
+            .query_map([], |row| {
+                Ok(json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "name": row.get::<_, String>(1)?,
+                    "category_id": row.get::<_, i64>(2)?
+                }))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         items
     };
     let records = {
@@ -173,37 +172,43 @@ pub fn backup_export_zip(state: State<'_, AppState>) -> AppResult<Value> {
         items
     };
     let daily_data = {
-        let mut stmt = conn.prepare("SELECT id, log_date, efficiency, stage_id FROM daily_data ORDER BY id ASC")?;
-        let items = stmt.query_map([], |row| {
-            Ok(json!({
-                "id": row.get::<_, i64>(0)?,
-                "log_date": row.get::<_, String>(1)?,
-                "efficiency": row.get::<_, Option<f64>>(2)?,
-                "stage_id": row.get::<_, i64>(3)?
-            }))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut stmt = conn
+            .prepare("SELECT id, log_date, efficiency, stage_id FROM daily_data ORDER BY id ASC")?;
+        let items = stmt
+            .query_map([], |row| {
+                Ok(json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "log_date": row.get::<_, String>(1)?,
+                    "efficiency": row.get::<_, Option<f64>>(2)?,
+                    "stage_id": row.get::<_, i64>(3)?
+                }))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         items
     };
     let weekly_data = {
-        let mut stmt = conn.prepare("SELECT id, year, week_num, efficiency, stage_id FROM weekly_data ORDER BY id ASC")?;
-        let items = stmt.query_map([], |row| {
-            Ok(json!({
-                "id": row.get::<_, i64>(0)?,
-                "year": row.get::<_, i64>(1)?,
-                "week_num": row.get::<_, i64>(2)?,
-                "efficiency": row.get::<_, Option<f64>>(3)?,
-                "stage_id": row.get::<_, i64>(4)?
-            }))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, year, week_num, efficiency, stage_id FROM weekly_data ORDER BY id ASC",
+        )?;
+        let items = stmt
+            .query_map([], |row| {
+                Ok(json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "year": row.get::<_, i64>(1)?,
+                    "week_num": row.get::<_, i64>(2)?,
+                    "efficiency": row.get::<_, Option<f64>>(3)?,
+                    "stage_id": row.get::<_, i64>(4)?
+                }))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         items
     };
     let mottos = super::features::mottos_list(state.clone())?["mottos"]
         .as_array()
         .cloned()
         .unwrap_or_default();
-    let milestone_categories = super::features::milestone_categories_list(state.clone())?["categories"]
+    let milestone_categories = super::features::milestone_categories_list(state.clone())?
+        ["categories"]
         .as_array()
         .cloned()
         .unwrap_or_default();
@@ -219,8 +224,7 @@ pub fn backup_export_zip(state: State<'_, AppState>) -> AppResult<Value> {
         .cloned()
         .unwrap_or_default();
     let attachments = {
-        let mut stmt =
-            conn.prepare("SELECT id FROM milestone_attachment ORDER BY id ASC")?;
+        let mut stmt = conn.prepare("SELECT id FROM milestone_attachment ORDER BY id ASC")?;
         let ids = stmt
             .query_map([], |row| row.get::<_, i64>(0))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -253,12 +257,23 @@ pub fn backup_export_zip(state: State<'_, AppState>) -> AppResult<Value> {
         ("data/countdown_event.json", json!(countdowns)),
         ("data/local_profile.json", json!(local_profile)),
         ("data/ai_insight.json", json!([])),
-        ("data/ai_chat_session.json", super::ai::ai_chat_sessions(state.clone())?["data"].clone()),
-        ("data/ai_chat_message.json", super::ai::ai_history_export_messages(state.clone())?),
+        (
+            "data/ai_chat_session.json",
+            super::ai::ai_chat_sessions(state.clone())?["data"].clone(),
+        ),
+        (
+            "data/ai_chat_message.json",
+            super::ai::ai_history_export_messages(state.clone())?,
+        ),
     ] {
-        writer.start_file(name, options).map_err(|e| super::common::invalid(&e.to_string()))?;
         writer
-            .write_all(&serde_json::to_vec_pretty(&value).map_err(|e| super::common::invalid(&e.to_string()))?)
+            .start_file(name, options)
+            .map_err(|e| super::common::invalid(&e.to_string()))?;
+        writer
+            .write_all(
+                &serde_json::to_vec_pretty(&value)
+                    .map_err(|e| super::common::invalid(&e.to_string()))?,
+            )
             .map_err(|e| super::common::invalid(&e.to_string()))?;
     }
 
@@ -273,7 +288,10 @@ pub fn backup_export_zip(state: State<'_, AppState>) -> AppResult<Value> {
         }
     }
 
-    let bytes = writer.finish().map_err(|e| super::common::invalid(&e.to_string()))?.into_inner();
+    let bytes = writer
+        .finish()
+        .map_err(|e| super::common::invalid(&e.to_string()))?
+        .into_inner();
     Ok(json!({
         "success": true,
         "data": bytes,
@@ -314,21 +332,21 @@ pub fn backup_import_zip(
     file_bytes: Vec<u8>,
 ) -> AppResult<Value> {
     let _ = file_name;
-    let mut archive =
-        ZipArchive::new(Cursor::new(file_bytes)).map_err(|e| super::common::invalid(&e.to_string()))?;
+    let mut archive = ZipArchive::new(Cursor::new(file_bytes))
+        .map_err(|e| super::common::invalid(&e.to_string()))?;
 
     let settings = read_json_entry(&mut archive, "data/setting.json")
         .map_err(|e| super::common::invalid(&e))?;
-    let stages = read_json_entry(&mut archive, "data/stage.json")
-        .map_err(|e| super::common::invalid(&e))?;
+    let stages =
+        read_json_entry(&mut archive, "data/stage.json").map_err(|e| super::common::invalid(&e))?;
     let categories = read_json_entry(&mut archive, "data/category.json")
         .map_err(|e| super::common::invalid(&e))?;
     let subcategories = read_json_entry(&mut archive, "data/sub_category.json")
         .map_err(|e| super::common::invalid(&e))?;
     let records = read_json_entry(&mut archive, "data/log_entry.json")
         .map_err(|e| super::common::invalid(&e))?;
-    let mottos = read_json_entry(&mut archive, "data/motto.json")
-        .map_err(|e| super::common::invalid(&e))?;
+    let mottos =
+        read_json_entry(&mut archive, "data/motto.json").map_err(|e| super::common::invalid(&e))?;
     let milestone_categories = read_json_entry(&mut archive, "data/milestone_category.json")
         .map_err(|e| super::common::invalid(&e))?;
     let milestones = read_json_entry(&mut archive, "data/milestone.json")
@@ -393,7 +411,9 @@ pub fn backup_import_zip(
             params![
                 profile["username"].as_str().unwrap_or("学习者"),
                 profile["email"].as_str().unwrap_or(""),
-                profile["created_at"].as_str().unwrap_or(&db::now_local_iso())
+                profile["created_at"]
+                    .as_str()
+                    .unwrap_or(&db::now_local_iso())
             ],
         )?;
     }
@@ -438,7 +458,8 @@ pub fn backup_import_zip(
     let mut sub_name_map = HashMap::<(i64, String), i64>::new();
     for item in subcategories {
         let Some(category_id) = value_as_i64(&item["category_id"])
-            .and_then(|old_id| category_map.get(&old_id).copied()) else {
+            .and_then(|old_id| category_map.get(&old_id).copied())
+        else {
             continue;
         };
         let name = item["name"].as_str().unwrap_or("未命名标签").trim();
@@ -474,7 +495,9 @@ pub fn backup_import_zip(
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 item["title"].as_str().unwrap_or("未命名成就"),
-                item["event_date"].as_str().unwrap_or_else(|| item["target_date"].as_str().unwrap_or("")),
+                item["event_date"]
+                    .as_str()
+                    .unwrap_or_else(|| item["target_date"].as_str().unwrap_or("")),
                 item["description"].as_str().unwrap_or(""),
                 category_id,
                 item["created_at"].as_str().unwrap_or(&db::now_local_iso())
@@ -490,9 +513,12 @@ pub fn backup_import_zip(
         let mapped_stage_id = value_as_i64(&item["stage_id"])
             .and_then(|old_id| stage_map.get(&old_id).copied())
             .or_else(|| {
-                db::parse_date(log_date)
-                    .ok()
-                    .and_then(|date| db::stage_for_date(&tx, date).ok().flatten().map(|tuple| tuple.0))
+                db::parse_date(log_date).ok().and_then(|date| {
+                    db::stage_for_date(&tx, date)
+                        .ok()
+                        .flatten()
+                        .map(|tuple| tuple.0)
+                })
             })
             .ok_or_else(|| super::common::invalid("导入失败：无法为学习记录匹配阶段"))?;
 
@@ -508,7 +534,9 @@ pub fn backup_import_zip(
                             .and_then(|name| category_name_map.get(name).copied())
                     });
                 match (category_id, sub["name"].as_str()) {
-                    (Some(category_id), Some(sub_name)) => sub_name_map.get(&(category_id, sub_name.to_string())).copied(),
+                    (Some(category_id), Some(sub_name)) => sub_name_map
+                        .get(&(category_id, sub_name.to_string()))
+                        .copied(),
                     _ => None,
                 }
             });
@@ -537,7 +565,8 @@ pub fn backup_import_zip(
     let mut attachment_name_uses = HashMap::<String, usize>::new();
     for item in milestone_attachments {
         let Some(milestone_id) = value_as_i64(&item["milestone_id"])
-            .and_then(|old_id| milestone_map.get(&old_id).copied()) else {
+            .and_then(|old_id| milestone_map.get(&old_id).copied())
+        else {
             continue;
         };
         let original_path = item["file_path"].as_str().unwrap_or("");
@@ -545,10 +574,7 @@ pub fn backup_import_zip(
             .as_str()
             .map(|item| item.to_string())
             .unwrap_or_else(|| basename(original_path));
-        let file_candidates = vec![
-            basename(original_path),
-            basename(&original_filename),
-        ];
+        let file_candidates = vec![basename(original_path), basename(&original_filename)];
         let relative_name = if let Some(bytes) =
             consume_attachment_bytes(&mut attachment_blobs, &file_candidates)
         {
@@ -583,7 +609,9 @@ pub fn backup_import_zip(
             params![
                 item["title"].as_str().unwrap_or("未命名倒计时"),
                 item["target_datetime_utc"].as_str().unwrap_or(""),
-                item["created_at_utc"].as_str().unwrap_or(&db::now_utc_iso())
+                item["created_at_utc"]
+                    .as_str()
+                    .unwrap_or(&db::now_utc_iso())
             ],
         )?;
     }
@@ -642,7 +670,8 @@ pub fn backup_import_zip(
 
     for item in ai_chat_messages {
         let Some(session_id) = value_as_i64(&item["session_id"])
-            .and_then(|old_id| ai_session_map.get(&old_id).copied()) else {
+            .and_then(|old_id| ai_session_map.get(&old_id).copied())
+        else {
             continue;
         };
         tx.execute(

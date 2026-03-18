@@ -8,7 +8,10 @@ use tauri::State;
 use crate::models::{AiChatSendPayload, AiConfigPayload, AiHistoryQuery};
 use crate::{AppResult, AppState};
 
-use super::common::{ai_config, connection, invalid, profile_json, recent_records_json, KEYRING_AI_KEY, KEYRING_SERVICE};
+use super::common::{
+    ai_config, connection, invalid, profile_json, recent_records_json, KEYRING_AI_KEY,
+    KEYRING_SERVICE,
+};
 use crate::db;
 
 pub fn ai_history_export_messages(state: State<'_, AppState>) -> AppResult<Value> {
@@ -71,7 +74,10 @@ async fn call_ai(
 
     let client = Client::new();
     let response = client
-        .post(format!("{}/chat/completions", config.base_url.trim_end_matches('/')))
+        .post(format!(
+            "{}/chat/completions",
+            config.base_url.trim_end_matches('/')
+        ))
         .bearer_auth(api_key)
         .json(&json!({
             "model": config.model_name,
@@ -103,10 +109,7 @@ pub fn ai_get_config(state: State<'_, AppState>) -> AppResult<Value> {
 }
 
 #[tauri::command]
-pub fn ai_update_config(
-    state: State<'_, AppState>,
-    payload: AiConfigPayload,
-) -> AppResult<Value> {
+pub fn ai_update_config(state: State<'_, AppState>, payload: AiConfigPayload) -> AppResult<Value> {
     let conn = connection(&state)?;
     if let Some(enabled) = payload.enabled {
         db::set_setting(&conn, "ai_enabled", if enabled { "true" } else { "false" })?;
@@ -253,7 +256,11 @@ pub async fn ai_chat_send(
             } else {
                 "AI 调用失败：网络异常或服务不可用，请稍后重试。"
             };
-            (fallback.to_string(), "rule_fallback".to_string(), String::new())
+            (
+                fallback.to_string(),
+                "rule_fallback".to_string(),
+                String::new(),
+            )
         }
     };
 
@@ -286,7 +293,12 @@ pub async fn ai_chat_send(
 
     let session = ai_chat_sessions(state.clone())?["data"]
         .as_array()
-        .and_then(|items| items.iter().find(|item| item["id"].as_i64() == Some(session_id)).cloned())
+        .and_then(|items| {
+            items
+                .iter()
+                .find(|item| item["id"].as_i64() == Some(session_id))
+                .cloned()
+        })
         .ok_or_else(|| invalid("会话不存在"))?;
     let messages = ai_chat_messages(state.clone(), session_id)?["data"]["messages"]
         .as_array()
