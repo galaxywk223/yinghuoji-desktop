@@ -1,14 +1,7 @@
-/**
- * 本地档案状态管理
- */
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import { authAPI } from "@/api";
 import { ElMessage } from "element-plus";
-import type {
-  User,
-  UserProfileResponse,
-} from "@/types";
+import type { User } from "@/types";
 
 export const useAuthStore = defineStore("auth", () => {
   const user = ref<User | null>(null);
@@ -35,21 +28,14 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   async function checkAuth() {
-    try {
-      const response =
-        (await authAPI.getCurrentUser()) as unknown as UserProfileResponse;
-      if (response.success) {
-        user.value = response.user || (response as any).data || null;
-        initialized.value = true;
-        return true;
-      }
-      initialized.value = true;
-      return false;
-    } catch (error) {
-      console.error("加载本地档案失败:", error);
-      initialized.value = true;
-      return false;
-    }
+    user.value = {
+      id: 1,
+      username: "学习者",
+      email: "",
+      created_at: "",
+    };
+    initialized.value = true;
+    return true;
   }
 
   async function refresh() {

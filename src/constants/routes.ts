@@ -22,7 +22,6 @@ export const ROUTE_NAMES = {
   // 设置
   SETTINGS: "Settings",
   SETTINGS_APPEARANCE: "SettingsAppearance",
-  SETTINGS_ACCOUNT: "SettingsAccount",
   SETTINGS_DATA: "SettingsData",
 
   // 错误

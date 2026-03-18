@@ -9,10 +9,6 @@
       <div class="settings-main-content">
         <aside class="settings-sidebar">
           <nav class="settings-nav">
-            <router-link to="/settings/account" class="settings-nav-item">
-              <Icon icon="lucide:user-circle" />
-              <span>本地档案</span>
-            </router-link>
             <router-link to="/settings/data" class="settings-nav-item">
               <Icon icon="lucide:database" />
               <span>数据管理</span>

@@ -79,14 +79,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: "settings",
         component: () => import("@/views/settings/SettingsLayout.vue"),
-        redirect: "/settings/account",
+        redirect: "/settings/data",
         children: [
-          {
-            path: "account",
-            name: "SettingsAccount",
-            component: () => import("@/views/settings/Account.vue"),
-            meta: { title: "本地档案" },
-          },
           {
             path: "data",
             name: "SettingsData",

@@ -96,7 +96,15 @@ async function baseRequest(config: RequestConfig) {
 
   try {
     if (url === "/api/auth/me" && method === "get") {
-      return await invoke("profile_get");
+      return {
+        success: true,
+        user: {
+          id: 1,
+          username: "学习者",
+          email: "",
+          created_at: "",
+        },
+      };
     }
     if (url === "/api/auth/login" && method === "post") {
       return {
@@ -116,7 +124,7 @@ async function baseRequest(config: RequestConfig) {
     if (url === "/api/auth/change-password" && method === "post") {
       return {
         success: false,
-        message: "桌面端为本地档案模式，不提供密码修改。",
+        message: "桌面端为本地单用户模式，不提供密码修改。",
       };
     }
 
@@ -216,13 +224,6 @@ async function baseRequest(config: RequestConfig) {
     if (url === "/api/users/settings" && method === "post") {
       return await invoke("settings_set", { items: normalizeItems(data) });
     }
-    if (url === "/api/users/profile" && method === "get") {
-      return await invoke("profile_get");
-    }
-    if (url === "/api/users/profile" && method === "put") {
-      return await invoke("profile_update", { payload: data });
-    }
-
     if (url === "/api/charts/overview" && method === "get") {
       return await invoke("charts_overview", { query: params });
     }

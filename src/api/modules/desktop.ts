@@ -4,12 +4,6 @@ export const desktopAPI = {
   initialize() {
     return invoke("app_initialize");
   },
-  getProfile() {
-    return invoke("profile_get");
-  },
-  updateProfile(payload: { username: string; email?: string }) {
-    return invoke("profile_update", { payload });
-  },
   getAiConfig() {
     return invoke("ai_get_config");
   },
