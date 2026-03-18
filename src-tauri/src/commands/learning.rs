@@ -24,58 +24,6 @@ use super::forecast::{
     TrendForecastRequest,
 };
 
-fn labels_for_weekly(
-    conn: &rusqlite::Connection,
-    stage_id: Option<i64>,
-) -> Result<(Vec<String>, Vec<f64>, Vec<f64>)> {
-    let (daily_labels, daily_duration, daily_efficiency) =
-        super::common::labels_for_daily(conn, stage_id)?;
-    if daily_labels.is_empty() {
-        return Ok((Vec::new(), Vec::new(), Vec::new()));
-    }
-
-    let stage_anchor = if let Some(stage_id) = stage_id {
-        db::stage_start_date(conn, stage_id)?
-    } else {
-        let earliest_stage: String = conn.query_row(
-            "SELECT start_date FROM stage ORDER BY start_date ASC LIMIT 1",
-            [],
-            |row| row.get(0),
-        )?;
-        db::parse_date(&earliest_stage)?
-    };
-
-    let today = Local::now().date_naive();
-    let mut weekly_map = BTreeMap::<(i32, i32), (f64, f64, i64, NaiveDate, NaiveDate)>::new();
-    for (index, label) in daily_labels.iter().enumerate() {
-        let day = db::parse_date(label)?;
-        let (week_start, week_end, year, week_num) = db::get_custom_week_window(day, stage_anchor);
-        let entry = weekly_map
-            .entry((year, week_num))
-            .or_insert((0.0, 0.0, 0, week_start, week_end));
-        entry.0 += daily_duration.get(index).copied().unwrap_or(0.0);
-        entry.1 += daily_efficiency.get(index).copied().unwrap_or(0.0);
-        entry.2 += 1;
-    }
-
-    let mut labels = Vec::new();
-    let mut duration = Vec::new();
-    let mut efficiency = Vec::new();
-    for ((year, week_num), (duration_sum, efficiency_sum, days, week_start, week_end)) in weekly_map
-    {
-        let elapsed_days = if today >= week_start && today <= week_end {
-            (today - week_start).num_days() + 1
-        } else {
-            days
-        }
-        .clamp(1, 7);
-        labels.push(format!("{year}-W{week_num:02}"));
-        duration.push((duration_sum / elapsed_days as f64 * 100.0).round() / 100.0);
-        efficiency.push((efficiency_sum / elapsed_days as f64 * 100.0).round() / 100.0);
-    }
-    Ok((labels, duration, efficiency))
-}
-
 #[tauri::command]
 pub fn stages_list(state: State<'_, AppState>) -> AppResult<Value> {
     let conn = connection(&state)?;

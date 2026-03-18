@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, Utc};
@@ -577,8 +577,4 @@ pub fn remove_dir_contents(path: &Path) -> Result<()> {
         }
     }
     Ok(())
-}
-
-pub fn attachment_path(base_dir: &Path, relative: &str) -> PathBuf {
-    base_dir.join(relative.replace('/', std::path::MAIN_SEPARATOR_STR))
 }
