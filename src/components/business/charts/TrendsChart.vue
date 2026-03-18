@@ -108,27 +108,10 @@
 
 <script setup>
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
-import { use, graphic } from "echarts/core";
-import { LineChart } from "echarts/charts";
-import {
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  DataZoomComponent,
-  MarkAreaComponent,
-} from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import VChart from "vue-echarts";
+import { graphic } from "echarts/core";
+import { registerLineChartModules, VChart } from "@/lib/echarts";
 
-use([
-  CanvasRenderer,
-  LineChart,
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  DataZoomComponent,
-  MarkAreaComponent,
-]);
+registerLineChartModules();
 
 const props = defineProps({
   weeklyDurationData: { type: Object, required: true },

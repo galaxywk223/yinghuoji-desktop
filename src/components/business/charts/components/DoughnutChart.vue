@@ -31,13 +31,9 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from "vue";
-import { use } from "echarts/core";
-import { PieChart } from "echarts/charts";
-import { TooltipComponent, LegendComponent } from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import VChart from "vue-echarts";
+import { registerPieChartModules, VChart } from "@/lib/echarts";
 
-use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent]);
+registerPieChartModules();
 
 const props = defineProps({
   data: {

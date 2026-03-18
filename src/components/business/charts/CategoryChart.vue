@@ -6,25 +6,9 @@
 
 <script setup>
 import { computed } from "vue";
-import { use } from "echarts/core";
-import { CanvasRenderer } from "echarts/renderers";
-import { PieChart } from "echarts/charts";
-import {
-  TitleComponent,
-  TooltipComponent,
-  LegendComponent,
-  ToolboxComponent,
-} from "echarts/components";
-import VChart from "vue-echarts";
+import { registerPieChartModules, VChart } from "@/lib/echarts";
 
-use([
-  CanvasRenderer,
-  PieChart,
-  TitleComponent,
-  TooltipComponent,
-  LegendComponent,
-  ToolboxComponent,
-]);
+registerPieChartModules();
 
 const props = defineProps({
   data: { type: Array, default: () => [] },

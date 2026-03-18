@@ -6,25 +6,9 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from "vue";
-import { use } from "echarts/core";
-import { LineChart } from "echarts/charts";
-import {
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  DataZoomComponent,
-} from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import VChart from "vue-echarts";
+import { registerLineChartModules, VChart } from "@/lib/echarts";
 
-use([
-  CanvasRenderer,
-  LineChart,
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  DataZoomComponent,
-]);
+registerLineChartModules();
 
 const props = defineProps({
   data: {

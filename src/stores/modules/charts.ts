@@ -4,6 +4,14 @@ import dayjs from "dayjs";
 import { chartsAPI } from "@/api/modules/charts";
 import { stageAPI } from "@/api/modules/stage";
 import { ElMessage } from "element-plus";
+import {
+  createDefaultTrendsState,
+  createPendingForecastBundle,
+  mergeForecastBundleIntoPayload,
+  mergeForecastBundleIntoTrends,
+  normalizeForecastStatus,
+  normalizeTrendPayload,
+} from "./charts.helpers";
 
 /**
  * 图表数据Store
@@ -17,38 +25,6 @@ export const useChartsStore = defineStore("charts", () => {
   const OVERVIEW_CACHE_PREFIX = "charts:overview:";
   const TOP_SUMMARY_CACHE_PREFIX = "charts:top-summary:";
   const UI_STATE_STORAGE_KEY = "charts:ui-state";
-
-  const defaultForecast = () => ({
-    labels: [],
-    prediction: [],
-    lower: [],
-    upper: [],
-    model_name: null,
-    history_points: 0,
-    horizon: 0,
-    trained_on: "all_history",
-    confidence_level: 0.8,
-    accuracy_threshold: 0.4,
-    selection_strategy: "lowest_wape_then_rmse_with_weighted_blend",
-    validation_wape: null,
-    validation_rmse: null,
-    baseline_wape: null,
-    baseline_rmse: null,
-    model_candidates: [],
-    available: false,
-    reason: "",
-    status: "unavailable",
-  });
-
-  const defaultTrendDataset = () => ({
-    labels: [],
-    actuals: [],
-    trends: [],
-    ongoing: false,
-    ongoing_label: null,
-    ongoing_value: null,
-    forecast: defaultForecast(),
-  });
 
   // ========== 状态 ==========
   // 过滤器
@@ -86,10 +62,7 @@ export const useChartsStore = defineStore("charts", () => {
 
   // 趋势图表数据（从rawChartData中提取）
   const trends = ref({
-    weekly_duration_data: defaultTrendDataset(),
-    weekly_efficiency_data: defaultTrendDataset(),
-    daily_duration_data: defaultTrendDataset(),
-    daily_efficiency_data: defaultTrendDataset(),
+    ...createDefaultTrendsState(),
   });
   const forecastStatus = ref({
     state: "idle",
@@ -287,49 +260,10 @@ export const useChartsStore = defineStore("charts", () => {
       };
     }
 
-    trends.value = {
-      weekly_duration_data: {
-        ...defaultTrendDataset(),
-        ...(data.weekly_duration_data || {}),
-        forecast: {
-          ...defaultForecast(),
-          ...(data.weekly_duration_data?.forecast || {}),
-        },
-      },
-      weekly_efficiency_data: {
-        ...defaultTrendDataset(),
-        ...(data.weekly_efficiency_data || {}),
-        forecast: {
-          ...defaultForecast(),
-          ...(data.weekly_efficiency_data?.forecast || {}),
-        },
-      },
-      daily_duration_data: {
-        ...defaultTrendDataset(),
-        ...(data.daily_duration_data || {}),
-        forecast: {
-          ...defaultForecast(),
-          ...(data.daily_duration_data?.forecast || {}),
-        },
-      },
-      daily_efficiency_data: {
-        ...defaultTrendDataset(),
-        ...(data.daily_efficiency_data || {}),
-        forecast: {
-          ...defaultForecast(),
-          ...(data.daily_efficiency_data?.forecast || {}),
-        },
-      },
-    };
+    trends.value = normalizeTrendPayload(data);
 
     stageAnnotations.value = data.stage_annotations || [];
-    forecastStatus.value = {
-      state: data.forecast_status?.state || "idle",
-      signature: data.forecast_status?.signature || null,
-      message: data.forecast_status?.message || "",
-      updated_at: data.forecast_status?.updated_at || null,
-      trained_for_date: data.forecast_status?.trained_for_date || null,
-    };
+    forecastStatus.value = normalizeForecastStatus(data.forecast_status);
   }
 
   hydrateUiState();
@@ -382,13 +316,8 @@ export const useChartsStore = defineStore("charts", () => {
           efficiency_star: "--",
           weekly_trend: "--",
         };
-        forecastStatus.value = {
-          state: "unavailable",
-          signature: null,
-          message: "",
-          updated_at: null,
-          trained_for_date: null,
-        };
+        trends.value = createDefaultTrendsState();
+        forecastStatus.value = normalizeForecastStatus({ state: "unavailable" });
         return;
       }
 
@@ -408,13 +337,11 @@ export const useChartsStore = defineStore("charts", () => {
       trendsError.value = errorMessage;
       ElMessage.error("加载趋势图表数据失败");
       rawChartData.value = { has_data: false };
-      forecastStatus.value = {
+      trends.value = createDefaultTrendsState();
+      forecastStatus.value = normalizeForecastStatus({
         state: "error",
-        signature: null,
         message: errorMessage,
-        updated_at: null,
-        trained_for_date: null,
-      };
+      });
     } finally {
       trendsLoading.value = false;
     }
@@ -422,80 +349,14 @@ export const useChartsStore = defineStore("charts", () => {
 
   function mergeForecastBundle(forecasts: Record<string, any> | null | undefined) {
     if (!forecasts) return;
+    trends.value = mergeForecastBundleIntoTrends(trends.value as any, forecasts) as any;
     if ((rawChartData.value as any)?.has_data) {
-      rawChartData.value = {
-        ...(rawChartData.value as any),
-        weekly_duration_data: {
-          ...(rawChartData.value as any).weekly_duration_data,
-          forecast: {
-            ...defaultForecast(),
-            ...(forecasts.weekly_duration_data || {}),
-          },
-        },
-        weekly_efficiency_data: {
-          ...(rawChartData.value as any).weekly_efficiency_data,
-          forecast: {
-            ...defaultForecast(),
-            ...(forecasts.weekly_efficiency_data || {}),
-          },
-        },
-        daily_duration_data: {
-          ...(rawChartData.value as any).daily_duration_data,
-          forecast: {
-            ...defaultForecast(),
-            ...(forecasts.daily_duration_data || {}),
-          },
-        },
-        daily_efficiency_data: {
-          ...(rawChartData.value as any).daily_efficiency_data,
-          forecast: {
-            ...defaultForecast(),
-            ...(forecasts.daily_efficiency_data || {}),
-          },
-        },
-      };
-    }
-    trends.value = {
-      weekly_duration_data: {
-        ...trends.value.weekly_duration_data,
-        forecast: {
-          ...defaultForecast(),
-          ...(forecasts.weekly_duration_data || {}),
-        },
-      },
-      weekly_efficiency_data: {
-        ...trends.value.weekly_efficiency_data,
-        forecast: {
-          ...defaultForecast(),
-          ...(forecasts.weekly_efficiency_data || {}),
-        },
-      },
-      daily_duration_data: {
-        ...trends.value.daily_duration_data,
-        forecast: {
-          ...defaultForecast(),
-          ...(forecasts.daily_duration_data || {}),
-        },
-      },
-      daily_efficiency_data: {
-        ...trends.value.daily_efficiency_data,
-        forecast: {
-          ...defaultForecast(),
-          ...(forecasts.daily_efficiency_data || {}),
-        },
-      },
-    };
-    if ((rawChartData.value as any)?.has_data) {
-      rawChartData.value = {
-        ...(rawChartData.value as any),
-        forecast_status: {
-          ...(rawChartData.value as any).forecast_status,
-          ...forecastStatus.value,
-        },
-      };
-      persistOverviewCache({
-        ...(rawChartData.value as any),
-      });
+      rawChartData.value = mergeForecastBundleIntoPayload(
+        rawChartData.value,
+        forecasts,
+        forecastStatus.value,
+      );
+      persistOverviewCache(rawChartData.value);
     }
   }
 
@@ -521,13 +382,7 @@ export const useChartsStore = defineStore("charts", () => {
     }
     const response: any = await chartsAPI.getOverviewForecast();
     const payload = response?.data || response;
-    forecastStatus.value = {
-      state: payload?.status || "idle",
-      signature: payload?.signature || forecastStatus.value.signature,
-      message: payload?.message || "",
-      updated_at: payload?.updated_at || null,
-      trained_for_date: payload?.trained_for_date || null,
-    };
+    forecastStatus.value = normalizeForecastStatus(payload, forecastStatus.value);
     mergeForecastBundle(payload?.forecasts);
 
     if (payload?.status === "ready" || payload?.status === "error") {
@@ -537,11 +392,14 @@ export const useChartsStore = defineStore("charts", () => {
 
     if (attempt >= 60) {
       forecastPollingTimer = null;
-      forecastStatus.value = {
-        ...forecastStatus.value,
-        state: "error",
-        message: "预测生成耗时过长，请稍后手动刷新",
-      };
+      forecastStatus.value = normalizeForecastStatus(
+        {
+          ...forecastStatus.value,
+          state: "error",
+          message: "预测生成耗时过长，请稍后手动刷新",
+        },
+        forecastStatus.value,
+      );
       return;
     }
 
@@ -561,19 +419,15 @@ export const useChartsStore = defineStore("charts", () => {
     try {
       const response: any = await chartsAPI.retrainOverviewForecast();
       const payload = response?.data || response;
-      forecastStatus.value = {
-        state: payload?.status || "pending",
-        signature: payload?.signature || forecastStatus.value.signature,
-        message: payload?.message || "已开始重新训练预测模型",
-        updated_at: payload?.updated_at || null,
-        trained_for_date: payload?.trained_for_date || null,
-      };
-      mergeForecastBundle({
-        weekly_duration_data: { ...defaultForecast(), status: "pending", reason: "预测计算中，请稍后刷新" },
-        weekly_efficiency_data: { ...defaultForecast(), status: "pending", reason: "预测计算中，请稍后刷新" },
-        daily_duration_data: { ...defaultForecast(), status: "pending", reason: "预测计算中，请稍后刷新" },
-        daily_efficiency_data: { ...defaultForecast(), status: "pending", reason: "预测计算中，请稍后刷新" },
-      });
+      forecastStatus.value = normalizeForecastStatus(
+        {
+          ...payload,
+          state: payload?.status || "pending",
+          message: payload?.message || "已开始重新训练预测模型",
+        },
+        forecastStatus.value,
+      );
+      mergeForecastBundle(createPendingForecastBundle());
       startForecastPolling();
       ElMessage.success("已开始重新训练预测模型");
     } catch (error) {

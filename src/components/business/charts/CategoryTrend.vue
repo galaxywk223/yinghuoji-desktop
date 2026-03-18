@@ -74,26 +74,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, watch, nextTick, ref, onUnmounted } from "vue";
-import { use, graphic } from "echarts/core";
-import { BarChart } from "echarts/charts";
-import {
-  GridComponent,
-  TooltipComponent,
-  DataZoomComponent,
-} from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import VChart from "vue-echarts";
+import { graphic } from "echarts/core";
 import { storeToRefs } from "pinia";
+import { registerBarChartModules, VChart } from "@/lib/echarts";
 import { useCategoryStore } from "@/stores/category";
 import { useChartsStore } from "@/stores/modules/charts";
 
-use([
-  CanvasRenderer,
-  BarChart,
-  GridComponent,
-  TooltipComponent,
-  DataZoomComponent,
-]);
+registerBarChartModules();
 
 const categoryStore = useCategoryStore();
 const chartsStore = useChartsStore();

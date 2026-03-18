@@ -1,6 +1,8 @@
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import Components from "unplugin-vue-components/vite";
+import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
 
 const resolvePackageName = (id: string) => {
   const normalized = id.replace(/\\/g, "/");
@@ -25,6 +27,15 @@ export default defineConfig({
           isCustomElement: (tag) => tag.startsWith("ion-"),
         },
       },
+    }),
+    Components({
+      dts: false,
+      resolvers: [
+        ElementPlusResolver({
+          importStyle: "css",
+          directives: true,
+        }),
+      ],
     }),
   ],
 
@@ -64,9 +75,6 @@ export default defineConfig({
           if (pkgName === "echarts" || pkgName === "vue-echarts")
             return "echarts";
           if (pkgName === "element-plus") return "element-plus";
-          if (pkgName === "chart.js" || pkgName === "chartjs-plugin-datalabels")
-            return "chartjs";
-
           // 核心 Vue 生态合并成一个稳定的 vendor
           if (
             ["vue", "vue-router", "pinia", "@vue", "@vueuse"].includes(pkgName)
