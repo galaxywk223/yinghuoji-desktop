@@ -1082,42 +1082,29 @@ fn resolve_stage_snapshot(stages: &[(i64, String, NaiveDate)], target_date: Naiv
 fn forecast_signature(context: &OverviewContext) -> String {
     let payload = json!({
         "global_start_date": context.global_start_date.format("%Y-%m-%d").to_string(),
-        "last_log_date": context.last_log_date.format("%Y-%m-%d").to_string(),
         "daily_duration_data": {
             "training_labels": context.daily_duration.training_labels,
             "training_actuals": context.daily_duration.training_actuals,
             "training_stage_features": context.daily_duration.training_stage_features,
             "future_stage_features": context.daily_duration.future_stage_features,
-            "ongoing_label": context.daily_duration.ongoing_label,
-            "ongoing_value": context.daily_duration.ongoing_value,
-            "ongoing": context.daily_duration.ongoing,
         },
         "daily_efficiency_data": {
             "training_labels": context.daily_efficiency.training_labels,
             "training_actuals": context.daily_efficiency.training_actuals,
             "training_stage_features": context.daily_efficiency.training_stage_features,
             "future_stage_features": context.daily_efficiency.future_stage_features,
-            "ongoing_label": context.daily_efficiency.ongoing_label,
-            "ongoing_value": context.daily_efficiency.ongoing_value,
-            "ongoing": context.daily_efficiency.ongoing,
         },
         "weekly_duration_data": {
             "training_labels": context.weekly_duration.training_labels,
             "training_actuals": context.weekly_duration.training_actuals,
             "training_stage_features": context.weekly_duration.training_stage_features,
             "future_stage_features": context.weekly_duration.future_stage_features,
-            "ongoing_label": context.weekly_duration.ongoing_label,
-            "ongoing_value": context.weekly_duration.ongoing_value,
-            "ongoing": context.weekly_duration.ongoing,
         },
         "weekly_efficiency_data": {
             "training_labels": context.weekly_efficiency.training_labels,
             "training_actuals": context.weekly_efficiency.training_actuals,
             "training_stage_features": context.weekly_efficiency.training_stage_features,
             "future_stage_features": context.weekly_efficiency.future_stage_features,
-            "ongoing_label": context.weekly_efficiency.ongoing_label,
-            "ongoing_value": context.weekly_efficiency.ongoing_value,
-            "ongoing": context.weekly_efficiency.ongoing,
         },
     });
     let digest = payload.to_string();
@@ -1281,7 +1268,9 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
     } else {
         weekly_labels.len()
     };
-    let weekly_reference_date = if weekly_incomplete { today } else { last_log_date + Duration::days(7) };
+    // Keep weekly future features stable within the same day even when the
+    // user creates the first record for the current week.
+    let weekly_reference_date = today;
     let weekly_future_stage_features = (0..8)
         .map(|offset| {
             let snapshot = resolve_stage_snapshot(&stages, weekly_reference_date + Duration::days((offset * 7) as i64));
@@ -1794,4 +1783,84 @@ pub fn charts_category_trend(
 pub fn charts_stages(state: State<'_, AppState>) -> AppResult<Value> {
     let conn = connection(&state)?;
     Ok(json!({ "success": true, "data": { "stages": stages_json(&conn)? } }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_dataset() -> OverviewDataset {
+        OverviewDataset {
+            labels: vec![
+                "2025-03-01".to_string(),
+                "2025-03-02".to_string(),
+                "2025-03-03".to_string(),
+            ],
+            actuals: vec![1.2, 2.4, 3.6],
+            training_labels: vec![
+                "2025-03-01".to_string(),
+                "2025-03-02".to_string(),
+                "2025-03-03".to_string(),
+            ],
+            training_actuals: vec![Some(1.2), Some(2.4), Some(3.6)],
+            training_stage_features: vec![
+                vec![0.0, 0.0, 0.0],
+                vec![1.0, 0.0, 0.0],
+                vec![2.0, 0.0, 0.0],
+            ],
+            future_stage_features: vec![vec![3.0, 0.0, 0.0], vec![4.0, 0.0, 0.0]],
+            ongoing: true,
+            ongoing_label: Some("2025-03-11".to_string()),
+            ongoing_value: Some(4.2),
+        }
+    }
+
+    fn sample_context() -> OverviewContext {
+        OverviewContext {
+            global_start_date: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            last_log_date: NaiveDate::from_ymd_opt(2025, 3, 11).unwrap(),
+            kpis: json!({}),
+            stage_annotations: vec![],
+            daily_duration: sample_dataset(),
+            daily_efficiency: sample_dataset(),
+            weekly_duration: OverviewDataset {
+                ongoing_label: Some("2025-W11".to_string()),
+                ..sample_dataset()
+            },
+            weekly_efficiency: OverviewDataset {
+                ongoing_label: Some("2025-W11".to_string()),
+                ..sample_dataset()
+            },
+        }
+    }
+
+    #[test]
+    fn forecast_signature_ignores_ongoing_buckets_and_last_log_date() {
+        let base = sample_context();
+        let mut changed = sample_context();
+        changed.last_log_date = NaiveDate::from_ymd_opt(2025, 3, 12).unwrap();
+        changed.daily_duration.ongoing = false;
+        changed.daily_duration.ongoing_label = Some("2025-03-12".to_string());
+        changed.daily_duration.ongoing_value = Some(9.9);
+        changed.daily_efficiency.ongoing = false;
+        changed.daily_efficiency.ongoing_label = Some("2025-03-12".to_string());
+        changed.daily_efficiency.ongoing_value = Some(8.8);
+        changed.weekly_duration.ongoing = false;
+        changed.weekly_duration.ongoing_label = Some("2025-W12".to_string());
+        changed.weekly_duration.ongoing_value = Some(7.7);
+        changed.weekly_efficiency.ongoing = false;
+        changed.weekly_efficiency.ongoing_label = Some("2025-W12".to_string());
+        changed.weekly_efficiency.ongoing_value = Some(6.6);
+
+        assert_eq!(forecast_signature(&base), forecast_signature(&changed));
+    }
+
+    #[test]
+    fn forecast_signature_changes_when_completed_history_changes() {
+        let base = sample_context();
+        let mut changed = sample_context();
+        changed.daily_duration.training_actuals[1] = Some(9.9);
+
+        assert_ne!(forecast_signature(&base), forecast_signature(&changed));
+    }
 }
