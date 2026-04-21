@@ -1,10 +1,12 @@
 use std::fs;
+use std::path::Path;
 
 use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 use sanitize_filename::sanitize;
 use serde_json::{json, Value};
-use tauri::State;
+use tauri::{AppHandle, State};
+use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 use crate::models::{
@@ -14,6 +16,48 @@ use crate::{AppResult, AppState};
 
 use super::common::{attachment_view_json, connection, invalid, remove_attachment_file};
 use crate::db;
+
+fn guess_attachment_extension(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("jpg")
+    } else if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        Some("png")
+    } else if bytes.starts_with(b"%PDF-") {
+        Some("pdf")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("gif")
+    } else if bytes.len() > 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("webp")
+    } else {
+        None
+    }
+}
+
+fn attachment_open_name(original_filename: &str, file_path: &str, bytes: &[u8]) -> String {
+    let original_filename = sanitize(if original_filename.trim().is_empty() {
+        Path::new(file_path)
+            .file_name()
+            .and_then(|item| item.to_str())
+            .unwrap_or("attachment")
+            .to_string()
+    } else {
+        original_filename.to_string()
+    });
+
+    let has_extension = Path::new(&original_filename)
+        .extension()
+        .and_then(|item| item.to_str())
+        .is_some();
+
+    if has_extension {
+        return original_filename;
+    }
+
+    match guess_attachment_extension(bytes) {
+        Some(ext) => format!("{original_filename}.{ext}"),
+        None => original_filename,
+    }
+}
 
 #[tauri::command]
 pub fn countdowns_list(state: State<'_, AppState>) -> AppResult<Value> {
@@ -548,4 +592,41 @@ pub fn milestone_attachment_delete(
 pub fn milestone_attachment_get(state: State<'_, AppState>, file_path: String) -> AppResult<Value> {
     let bytes = fs::read(state.attachments_dir.join(&file_path))?;
     Ok(json!({ "success": true, "data": bytes, "file_name": file_path }))
+}
+
+#[tauri::command]
+pub fn milestone_attachment_open(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    attachment_id: i64,
+) -> AppResult<Value> {
+    let conn = connection(&state)?;
+    let attachment =
+        attachment_view_json(&conn, attachment_id)?.ok_or_else(|| invalid("附件不存在"))?;
+    let relative_path = attachment["file_path"]
+        .as_str()
+        .ok_or_else(|| invalid("附件路径无效"))?;
+    let source_path = state.attachments_dir.join(relative_path);
+
+    if !source_path.exists() {
+        return Err(invalid("附件文件不存在"));
+    }
+
+    let bytes = fs::read(&source_path)?;
+    let open_name = attachment_open_name(
+        attachment["original_filename"].as_str().unwrap_or(relative_path),
+        relative_path,
+        &bytes,
+    );
+
+    let temp_dir = std::env::temp_dir().join("yinghuoji-opened-attachments");
+    fs::create_dir_all(&temp_dir)?;
+    let temp_path = temp_dir.join(open_name);
+    fs::write(&temp_path, bytes)?;
+
+    app.opener()
+        .open_path(temp_path.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| invalid(&e.to_string()))?;
+
+    Ok(json!({ "success": true }))
 }

@@ -254,6 +254,7 @@ pub fn run() {
             commands::milestone_attachment_upload,
             commands::milestone_attachment_delete,
             commands::milestone_attachment_get,
+            commands::milestone_attachment_open,
             commands::backup_export_zip,
             commands::backup_import_zip,
             commands::backup_clear_all

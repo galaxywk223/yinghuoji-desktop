@@ -47,26 +47,35 @@
             :key="att.id"
             class="attachment-item"
           >
-            <a
-              :href="downloadUrl(att)"
-              target="_blank"
+            <button
+              type="button"
               class="attachment-link"
-              @click.prevent="openAttachment(att)"
+              @click.stop="openAttachment(att)"
             >
               <Icon
                 icon="lucide:image"
                 :style="{ width: '16px', height: '16px' }"
               />
               <span>{{ att.original_filename }}</span>
-            </a>
-            <button
-              v-if="enableActions"
-              class="attachment-delete-btn"
-              title="删除此附件"
-              @click.stop="deleteAttachment(att)"
-            >
-              <Icon icon="lucide:x" />
             </button>
+            <el-popconfirm
+              v-if="enableActions"
+              title="确定要永久删除这个附件吗？"
+              confirm-button-text="删除"
+              cancel-button-text="取消"
+              @confirm="deleteAttachment(att)"
+            >
+              <template #reference>
+                <button
+                  type="button"
+                  class="attachment-delete-btn"
+                  title="删除此附件"
+                  @click.stop
+                >
+                  <Icon icon="lucide:x" />
+                </button>
+              </template>
+            </el-popconfirm>
           </div>
         </div>
       </div>
@@ -76,9 +85,9 @@
 
 <script setup>
 import { computed } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { Icon } from "@iconify/vue";
 import { milestoneAPI } from "@/api/modules/milestone";
-import request from "@/utils/request";
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -109,40 +118,51 @@ const descriptionText = computed(() =>
 function editItem() {
   emits("edit", props.item);
 }
+
+async function confirmDeletion(message, title = "确认删除") {
+  try {
+    await ElMessageBox.confirm(message, title, {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消",
+      confirmButtonClass: "el-button--danger",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function deleteItem() {
-  if (!confirm("确定要永久删除这个成就吗？")) return;
+  if (!(await confirmDeletion("确定要永久删除这个成就吗？"))) return;
   try {
     await milestoneAPI.remove(props.item.id);
     emits("deleted", props.item.id);
+    ElMessage.success("成就已删除");
   } catch (e) {
     console.error("delete milestone failed", e);
+    ElMessage.error("删除成就失败");
   }
-}
-function downloadUrl(att) {
-  return `/api/milestones/attachments/${encodeURIComponent(att.file_path)}`;
 }
 async function openAttachment(att) {
   try {
-    const response = await request.get(downloadUrl(att), {
-      responseType: "blob",
-    });
-    const blobUrl = URL.createObjectURL(response.data);
-    window.open(blobUrl, "_blank", "noopener,noreferrer");
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+    await milestoneAPI.openAttachment(att.id);
   } catch (error) {
     console.error("open attachment failed", error);
+    ElMessage.error("打开附件失败");
   }
 }
 async function deleteAttachment(att) {
-  if (!confirm("确定要永久删除这个附件吗？")) return;
   try {
     await milestoneAPI.deleteAttachment(props.item.id, att.id);
     emits("attachment-deleted", {
       milestoneId: props.item.id,
       attachmentId: att.id,
     });
+    ElMessage.success("附件已删除");
   } catch (e) {
     console.error("delete attachment failed", e);
+    ElMessage.error("删除附件失败");
   }
 }
 </script>

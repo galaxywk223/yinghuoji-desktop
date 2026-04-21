@@ -310,6 +310,10 @@ async function baseRequest(config: RequestConfig) {
       const attachmentId = Number(parts[5]);
       return await invoke("milestone_attachment_delete", { milestoneId, attachmentId });
     }
+    if (/^\/api\/milestones\/attachments\/\d+\/open$/.test(url) && method === "post") {
+      const attachmentId = Number(url.split("/")[4]);
+      return await invoke("milestone_attachment_open", { attachmentId });
+    }
     if (url.startsWith("/api/milestones/attachments/") && method === "get") {
       const filePath = decodeURIComponent(url.replace("/api/milestones/attachments/", ""));
       const result = await invoke<any>("milestone_attachment_get", { filePath });

@@ -71,6 +71,38 @@ fn basename(value: &str) -> String {
         .to_string()
 }
 
+fn attachment_import_key(title: &str, event_date: &str, description: &str) -> String {
+    format!(
+        "{}\u{1f}|{}\u{1f}|{}",
+        title.trim(),
+        event_date.trim(),
+        description.trim()
+    )
+}
+
+fn attachment_preferred_name(original_path: &str, original_filename: &str) -> String {
+    let original_filename = basename(original_filename);
+    let original_path_name = basename(original_path);
+    let original_filename_has_ext = Path::new(&original_filename)
+        .extension()
+        .and_then(|item| item.to_str())
+        .is_some();
+    let original_path_has_ext = Path::new(&original_path_name)
+        .extension()
+        .and_then(|item| item.to_str())
+        .is_some();
+
+    if original_filename_has_ext {
+        original_filename
+    } else if original_path_has_ext {
+        original_path_name
+    } else if !original_filename.trim().is_empty() {
+        original_filename
+    } else {
+        original_path_name
+    }
+}
+
 fn next_unique_attachment_name(
     state: &AppState,
     used_names: &mut HashMap<String, usize>,
@@ -563,24 +595,33 @@ pub fn backup_import_zip(
     }
 
     let mut milestone_map = HashMap::<i64, i64>::new();
+    let mut milestone_key_map = HashMap::<String, i64>::new();
+    let mut milestone_key_by_old_id = HashMap::<i64, String>::new();
     for item in milestones {
         let category_id = value_as_i64(&item["category_id"])
             .and_then(|old_id| milestone_category_map.get(&old_id).copied());
+        let title = item["title"].as_str().unwrap_or("未命名成就");
+        let event_date = item["event_date"]
+            .as_str()
+            .unwrap_or_else(|| item["target_date"].as_str().unwrap_or(""));
+        let description = item["description"].as_str().unwrap_or("");
         tx.execute(
             "INSERT INTO milestone (title, event_date, description, category_id, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
-                item["title"].as_str().unwrap_or("未命名成就"),
-                item["event_date"]
-                    .as_str()
-                    .unwrap_or_else(|| item["target_date"].as_str().unwrap_or("")),
-                item["description"].as_str().unwrap_or(""),
+                title,
+                event_date,
+                description,
                 category_id,
                 item["created_at"].as_str().unwrap_or(&db::now_local_iso())
             ],
         )?;
+        let new_milestone_id = tx.last_insert_rowid();
+        let import_key = attachment_import_key(title, event_date, description);
+        milestone_key_map.insert(import_key.clone(), new_milestone_id);
         if let Some(old_id) = value_as_i64(&item["id"]) {
-            milestone_map.insert(old_id, tx.last_insert_rowid());
+            milestone_map.insert(old_id, new_milestone_id);
+            milestone_key_by_old_id.insert(old_id, import_key);
         }
     }
 
@@ -639,10 +680,23 @@ pub fn backup_import_zip(
     }
 
     let mut attachment_name_uses = HashMap::<String, usize>::new();
+    let mut missing_attachment_targets = Vec::<String>::new();
+    let mut missing_attachment_binaries = Vec::<String>::new();
     for item in milestone_attachments {
-        let Some(milestone_id) = value_as_i64(&item["milestone_id"])
-            .and_then(|old_id| milestone_map.get(&old_id).copied())
-        else {
+        let milestone_id = value_as_i64(&item["milestone_id"]).and_then(|old_id| {
+            milestone_map.get(&old_id).copied().or_else(|| {
+                milestone_key_by_old_id
+                    .get(&old_id)
+                    .and_then(|key| milestone_key_map.get(key).copied())
+            })
+        });
+        let Some(milestone_id) = milestone_id else {
+            let detail = format!(
+                "milestone_id={}, file_path={}",
+                item["milestone_id"],
+                item["file_path"].as_str().unwrap_or("")
+            );
+            missing_attachment_targets.push(detail);
             continue;
         };
         let original_path = item["file_path"].as_str().unwrap_or("");
@@ -651,20 +705,18 @@ pub fn backup_import_zip(
             .map(|item| item.to_string())
             .unwrap_or_else(|| basename(original_path));
         let file_candidates = vec![basename(original_path), basename(&original_filename)];
-        let relative_name = if let Some(bytes) =
-            consume_attachment_bytes(&mut attachment_blobs, &file_candidates)
-        {
-            let next_name =
-                next_unique_attachment_name(&state, &mut attachment_name_uses, &original_filename);
-            fs::write(state.attachments_dir.join(&next_name), bytes)?;
-            next_name
-        } else {
-            next_unique_attachment_name(
-                &state,
-                &mut attachment_name_uses,
-                &basename(&original_filename),
-            )
+        let preferred_name = attachment_preferred_name(original_path, &original_filename);
+        let Some(bytes) = consume_attachment_bytes(&mut attachment_blobs, &file_candidates) else {
+            missing_attachment_binaries.push(format!(
+                "{} ({})",
+                original_filename,
+                item["file_path"].as_str().unwrap_or("")
+            ));
+            continue;
         };
+        let relative_name =
+            next_unique_attachment_name(&state, &mut attachment_name_uses, &preferred_name);
+        fs::write(state.attachments_dir.join(&relative_name), bytes)?;
 
         tx.execute(
             "INSERT INTO milestone_attachment (milestone_id, file_path, original_filename, uploaded_at)
@@ -676,6 +728,24 @@ pub fn backup_import_zip(
                 item["uploaded_at"].as_str().unwrap_or(&db::now_local_iso())
             ],
         )?;
+    }
+
+    if !missing_attachment_targets.is_empty() {
+        let _ = db::remove_dir_contents(&state.attachments_dir);
+        return Err(super::common::invalid(&format!(
+            "导入失败：{} 个附件无法匹配到目标成就。首个异常：{}",
+            missing_attachment_targets.len(),
+            missing_attachment_targets[0]
+        )));
+    }
+
+    if !missing_attachment_binaries.is_empty() {
+        let _ = db::remove_dir_contents(&state.attachments_dir);
+        return Err(super::common::invalid(&format!(
+            "导入失败：ZIP 中缺少 {} 个附件文件。首个缺失项：{}",
+            missing_attachment_binaries.len(),
+            missing_attachment_binaries[0]
+        )));
     }
 
     for item in countdowns {

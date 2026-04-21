@@ -121,6 +121,12 @@
   gap: 6px;
   color: var(--color-primary-dark);
   font-size: 13px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
 .attachment-delete-btn {
@@ -133,6 +139,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
+  cursor: pointer;
 }
 
 @media (max-width: 768px) {
