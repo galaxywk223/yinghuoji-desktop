@@ -52,11 +52,53 @@ jobs:
         run: npm run type-check
 
       - name: Build and publish desktop release
+        id: tauri_release
         uses: tauri-apps/tauri-action@v0.6.2
         with:
           tagName: v__VERSION__
           releaseName: 萤火集桌面端 v__VERSION__
           releaseDraft: false
           prerelease: false
-          includeUpdaterJson: true
-          updaterJsonPreferNsis: true
+          includeUpdaterJson: false
+
+      - name: Generate updater latest.json
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ steps.tauri_release.outputs.appVersion }}
+        run: |
+          $release = gh release view "v$env:VERSION" --repo $env:REPO --json body,publishedAt,assets | ConvertFrom-Json
+          $installer = $release.assets | Where-Object { $_.name -match '\.exe$' } | Select-Object -First 1
+          $signatureAsset = $release.assets | Where-Object { $_.name -match '\.sig$' } | Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Release installer asset was not found."
+          }
+
+          if (-not $signatureAsset) {
+            throw "Release signature asset was not found."
+          }
+
+          $downloadDir = Join-Path $env:RUNNER_TEMP 'updater-assets'
+          New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
+          gh release download "v$env:VERSION" --repo $env:REPO --pattern $signatureAsset.name --dir $downloadDir --clobber
+
+          $signaturePath = Join-Path $downloadDir $signatureAsset.name
+          $signature = (Get-Content $signaturePath -Raw).Trim()
+
+          $latestJson = @{
+            version = $env:VERSION
+            notes = if ([string]::IsNullOrWhiteSpace($release.body)) { "Release $($env:VERSION)" } else { $release.body.Trim() }
+            pub_date = $release.publishedAt
+            platforms = @{
+              'windows-x86_64' = @{
+                signature = $signature
+                url = "https://github.com/$env:REPO/releases/download/v$env:VERSION/$($installer.name)"
+              }
+            }
+          } | ConvertTo-Json -Depth 6
+
+          $latestPath = Join-Path $env:RUNNER_TEMP 'latest.json'
+          Set-Content -Path $latestPath -Value $latestJson -Encoding UTF8
+          gh release upload "v$env:VERSION" $latestPath --repo $env:REPO --clobber
