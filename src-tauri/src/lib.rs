@@ -4,9 +4,22 @@ mod models;
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, Runtime, Window, WindowEvent,
+};
+
+const MAIN_WINDOW_LABEL: &str = "main";
+const TRAY_ID: &str = "main-tray";
+const TRAY_SHOW_ID: &str = "tray-show-main";
+const TRAY_EXIT_ID: &str = "tray-exit-app";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -63,11 +76,80 @@ impl From<zip::result::ZipError> for FrontendError {
 
 pub type AppResult<T> = Result<T, FrontendError>;
 
+fn hide_main_window<R: Runtime>(window: &Window<R>) {
+    let _ = window.set_skip_taskbar(true);
+    let _ = window.hide();
+}
+
+fn restore_main_window<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        let _ = window.set_skip_taskbar(false);
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn request_app_exit<R: Runtime>(app: &AppHandle<R>, exit_requested: &AtomicBool) {
+    exit_requested.store(true, Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        let _ = window.set_skip_taskbar(false);
+    }
+    app.exit(0);
+}
+
+fn build_tray<R: Runtime>(
+    app: &AppHandle<R>,
+    exit_requested: Arc<AtomicBool>,
+) -> anyhow::Result<()> {
+    let show_item = MenuItem::with_id(app, TRAY_SHOW_ID, "显示主窗口", true, None::<&str>)?;
+    let exit_item = MenuItem::with_id(app, TRAY_EXIT_ID, "退出应用", true, None::<&str>)?;
+    let tray_menu = Menu::with_items(app, &[&show_item, &exit_item])?;
+    let show_id = show_item.id().clone();
+    let exit_id = exit_item.id().clone();
+
+    let mut tray = TrayIconBuilder::with_id(TRAY_ID)
+        .menu(&tray_menu)
+        .tooltip("萤火集桌面端")
+        .show_menu_on_left_click(false)
+        .on_menu_event({
+            let exit_requested = exit_requested.clone();
+            move |app, event: tauri::menu::MenuEvent| {
+                if event.id() == &show_id {
+                    restore_main_window(app);
+                } else if event.id() == &exit_id {
+                    request_app_exit(app, exit_requested.as_ref());
+                }
+            }
+        })
+        .on_tray_icon_event(|tray: &tauri::tray::TrayIcon<R>, event: TrayIconEvent| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                restore_main_window(tray.app_handle());
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray = tray.icon(icon);
+    }
+
+    tray.build(app)?;
+    Ok(())
+}
+
 pub fn run() {
+    let exit_requested = Arc::new(AtomicBool::new(false));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
+        .setup({
+            let exit_requested = exit_requested.clone();
+            move |app| {
             let base_dir = app
                 .path()
                 .app_data_dir()
@@ -87,7 +169,25 @@ pub fn run() {
 
             db::initialize_database(&state)?;
             app.manage(state);
+            build_tray(app.handle(), exit_requested.clone())?;
             Ok(())
+        }
+        })
+        .on_window_event({
+            let exit_requested = exit_requested.clone();
+            move |window, event| {
+                if window.label() != MAIN_WINDOW_LABEL {
+                    return;
+                }
+
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    if exit_requested.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    api.prevent_close();
+                    hide_main_window(window);
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::profile_get,
