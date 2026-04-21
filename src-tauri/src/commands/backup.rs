@@ -3,7 +3,7 @@ use std::fs;
 use std::io::{Cursor, Read, Write};
 use std::path::Path;
 
-use rusqlite::params;
+use rusqlite::{params, Connection};
 use sanitize_filename::sanitize;
 use serde_json::{json, Value};
 use tauri::State;
@@ -124,6 +124,85 @@ fn consume_attachment_bytes(
     None
 }
 
+fn ai_insights_json(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, insight_type, scope, scope_reference, start_date, end_date, next_start_date,
+                next_end_date, input_snapshot, output_text, created_at
+         FROM ai_insight
+         ORDER BY id ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let snapshot: Option<String> = row.get(8)?;
+        Ok(json!({
+            "id": row.get::<_, i64>(0)?,
+            "user_id": 1,
+            "insight_type": row.get::<_, String>(1)?,
+            "scope": row.get::<_, String>(2)?,
+            "scope_reference": row.get::<_, Option<i64>>(3)?,
+            "start_date": row.get::<_, Option<String>>(4)?,
+            "end_date": row.get::<_, Option<String>>(5)?,
+            "next_start_date": row.get::<_, Option<String>>(6)?,
+            "next_end_date": row.get::<_, Option<String>>(7)?,
+            "input_snapshot": snapshot.and_then(|item| serde_json::from_str::<Value>(&item).ok()),
+            "output_text": row.get::<_, String>(9)?,
+            "created_at": row.get::<_, String>(10)?,
+        }))
+    })?;
+    rows.collect()
+}
+
+fn ai_chat_sessions_json(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, scope, scope_reference, date_reference, created_at, updated_at,
+                last_message_at
+         FROM ai_chat_session
+         ORDER BY datetime(last_message_at) DESC, id DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(json!({
+            "id": row.get::<_, i64>(0)?,
+            "user_id": 1,
+            "title": row.get::<_, String>(1)?,
+            "scope": row.get::<_, String>(2)?,
+            "scope_reference": row.get::<_, Option<i64>>(3)?,
+            "date_reference": row.get::<_, Option<String>>(4)?,
+            "created_at": row.get::<_, String>(5)?,
+            "updated_at": row.get::<_, String>(6)?,
+            "last_message_at": row.get::<_, String>(7)?,
+        }))
+    })?;
+    rows.collect()
+}
+
+fn ai_chat_messages_json(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, session_id, role, content, scope, scope_reference, date_reference,
+                generation_mode, model_name, meta_snapshot, created_at
+         FROM ai_chat_message
+         ORDER BY id ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let meta: Option<String> = row.get(9)?;
+        Ok(json!({
+            "id": row.get::<_, i64>(0)?,
+            "session_id": row.get::<_, i64>(1)?,
+            "user_id": 1,
+            "role": row.get::<_, String>(2)?,
+            "content": row.get::<_, String>(3)?,
+            "scope": row.get::<_, String>(4)?,
+            "scope_reference": row.get::<_, Option<i64>>(5)?,
+            "date_reference": row.get::<_, Option<String>>(6)?,
+            "generation_mode": row.get::<_, Option<String>>(7)?,
+            "model_name": row.get::<_, Option<String>>(8)?,
+            "meta": meta
+                .and_then(|item| serde_json::from_str::<Value>(&item).ok())
+                .unwrap_or_else(|| json!({})),
+            "created_at": row.get::<_, String>(10)?,
+        }))
+    })?;
+    rows.collect()
+}
+
 #[tauri::command]
 pub fn backup_export_zip(state: State<'_, AppState>) -> AppResult<Value> {
     let conn = connection(&state)?;
@@ -241,6 +320,9 @@ pub fn backup_export_zip(state: State<'_, AppState>) -> AppResult<Value> {
         .cloned()
         .unwrap_or_default();
     let local_profile = vec![profile_json(&conn)?];
+    let ai_insights = ai_insights_json(&conn)?;
+    let ai_chat_sessions = ai_chat_sessions_json(&conn)?;
+    let ai_chat_messages = ai_chat_messages_json(&conn)?;
 
     for (name, value) in [
         ("data/setting.json", json!(settings)),
@@ -256,15 +338,9 @@ pub fn backup_export_zip(state: State<'_, AppState>) -> AppResult<Value> {
         ("data/milestone_attachment.json", json!(attachments)),
         ("data/countdown_event.json", json!(countdowns)),
         ("data/local_profile.json", json!(local_profile)),
-        ("data/ai_insight.json", json!([])),
-        (
-            "data/ai_chat_session.json",
-            super::ai::ai_chat_sessions(state.clone())?["data"].clone(),
-        ),
-        (
-            "data/ai_chat_message.json",
-            super::ai::ai_history_export_messages(state.clone())?,
-        ),
+        ("data/ai_insight.json", json!(ai_insights)),
+        ("data/ai_chat_session.json", json!(ai_chat_sessions)),
+        ("data/ai_chat_message.json", json!(ai_chat_messages)),
     ] {
         writer
             .start_file(name, options)

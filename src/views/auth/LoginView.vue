@@ -7,7 +7,7 @@
         </div>
         <div :class="styles.headerText">
           <h2>萤火集</h2>
-          <p>多端同步 · 数据可视 · 智能规划</p>
+          <p>多端同步 · 数据可视 · 学习归档</p>
         </div>
       </div>
 

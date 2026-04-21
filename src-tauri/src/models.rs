@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer};
 
 fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
@@ -149,38 +149,4 @@ pub struct MilestonePayload {
 #[derive(Debug, Deserialize)]
 pub struct MilestoneCategoryPayload {
     pub name: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AiConfigPayload {
-    pub api_key: Option<String>,
-    pub model_name: Option<String>,
-    pub base_url: Option<String>,
-    pub enabled: Option<bool>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AiChatSendPayload {
-    pub session_id: Option<i64>,
-    pub scope: String,
-    pub date: Option<String>,
-    pub stage_id: Option<i64>,
-    pub content: String,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct AiHistoryQuery {
-    pub limit: Option<i64>,
-    pub offset: Option<i64>,
-    pub scope: Option<String>,
-    pub r#type: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AiConfigView {
-    pub configured: bool,
-    pub enabled: bool,
-    pub model_name: String,
-    pub base_url: String,
-    pub has_api_key: bool,
 }

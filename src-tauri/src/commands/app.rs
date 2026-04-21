@@ -7,22 +7,9 @@ use crate::models::{ProfileUpdatePayload, SettingItemPayload};
 use crate::{AppResult, AppState};
 
 use super::common::{
-    ai_config, connection, dashboard_greeting, profile_json, recent_records_json, settings_json,
+    connection, dashboard_greeting, profile_json, recent_records_json, settings_json,
 };
 use crate::db;
-
-#[tauri::command]
-pub fn app_initialize(state: State<'_, AppState>) -> AppResult<serde_json::Value> {
-    let conn = connection(&state)?;
-    Ok(json!({
-        "success": true,
-        "data": {
-            "profile": profile_json(&conn)?,
-            "settings": settings_json(&conn)?,
-            "ai": ai_config(&conn)?
-        }
-    }))
-}
 
 #[tauri::command]
 pub fn profile_get(state: State<'_, AppState>) -> AppResult<serde_json::Value> {

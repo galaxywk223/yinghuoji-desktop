@@ -316,20 +316,6 @@ async function baseRequest(config: RequestConfig) {
       return config.responseType === "blob" ? blobResponse(result) : result;
     }
 
-    if (url === "/api/ai/chat/messages" && method === "post") {
-      return await invoke("ai_chat_send", { payload: data });
-    }
-    if (url === "/api/ai/chat/sessions" && method === "get") {
-      return await invoke("ai_chat_sessions");
-    }
-    if (/^\/api\/ai\/chat\/sessions\/\d+\/messages$/.test(url) && method === "get") {
-      const sessionId = Number(url.split("/")[5]);
-      return await invoke("ai_chat_messages", { sessionId });
-    }
-    if (url === "/api/ai/history" && method === "get") {
-      return await invoke("ai_history_list", { query: params });
-    }
-
     if (url.startsWith("/api/leaderboard")) {
       return {
         success: false,

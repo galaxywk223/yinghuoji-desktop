@@ -53,14 +53,6 @@ impl From<std::io::Error> for FrontendError {
     }
 }
 
-impl From<keyring::Error> for FrontendError {
-    fn from(value: keyring::Error) -> Self {
-        Self {
-            message: value.to_string(),
-        }
-    }
-}
-
 impl From<zip::result::ZipError> for FrontendError {
     fn from(value: zip::result::ZipError) -> Self {
         Self {
@@ -98,7 +90,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::app_initialize,
             commands::profile_get,
             commands::profile_update,
             commands::settings_get,
@@ -157,13 +148,7 @@ pub fn run() {
             commands::milestone_attachment_get,
             commands::backup_export_zip,
             commands::backup_import_zip,
-            commands::backup_clear_all,
-            commands::ai_get_config,
-            commands::ai_update_config,
-            commands::ai_chat_sessions,
-            commands::ai_chat_messages,
-            commands::ai_chat_send,
-            commands::ai_history_list
+            commands::backup_clear_all
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

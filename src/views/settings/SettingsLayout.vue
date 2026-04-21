@@ -13,10 +13,6 @@
               <Icon icon="lucide:database" />
               <span>数据管理</span>
             </router-link>
-            <router-link to="/settings/ai" class="settings-nav-item">
-              <Icon icon="lucide:sparkles" />
-              <span>AI 配置</span>
-            </router-link>
             <router-link to="/settings/stages" class="settings-nav-item">
               <Icon icon="lucide:flag" />
               <span>阶段管理</span>

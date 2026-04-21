@@ -111,7 +111,6 @@ const navItems = [
   { to: "/charts", label: "统计分析", icon: "lucide:chart-column-big" },
   { to: "/countdown", label: "倒计时", icon: "lucide:calendar-clock" },
   { to: "/milestones", label: "成就时刻", icon: "lucide:trophy" },
-  { to: "/ai", label: "智能规划", icon: "lucide:sparkles" },
   { to: "/settings", label: "设置中心", icon: "lucide:settings-2" },
 ];
 

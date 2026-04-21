@@ -6,11 +6,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 
 use crate::db;
-use crate::models::AiConfigView;
 use crate::{AppState, FrontendError};
-
-pub const KEYRING_SERVICE: &str = "yinghuoji-desktop";
-pub const KEYRING_AI_KEY: &str = "qwen-api-key";
 
 pub fn connection(state: &AppState) -> Result<Connection> {
     db::open_connection(state)
@@ -265,25 +261,6 @@ pub fn dashboard_greeting() -> &'static str {
     } else {
         "晚上好"
     }
-}
-
-pub fn ai_config(conn: &Connection) -> Result<AiConfigView> {
-    let api_key = keyring::Entry::new(KEYRING_SERVICE, KEYRING_AI_KEY)
-        .ok()
-        .and_then(|entry| entry.get_password().ok())
-        .unwrap_or_default();
-    Ok(AiConfigView {
-        configured: !api_key.is_empty(),
-        enabled: db::get_setting(conn, "ai_enabled")?.unwrap_or_else(|| "true".to_string())
-            == "true",
-        model_name: db::get_setting(conn, "ai_model_name")?
-            .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)))
-            .unwrap_or_else(|| "qwen-plus-2025-07-28".to_string()),
-        base_url: db::get_setting(conn, "ai_base_url")?
-            .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)))
-            .unwrap_or_else(|| "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string()),
-        has_api_key: !api_key.is_empty(),
-    })
 }
 
 pub fn remove_attachment_file(state: &AppState, relative: &str) {

@@ -1,6 +1,9 @@
 import { createApp } from "vue";
 import { createPinia } from "pinia";
 
+import "element-plus/es/components/message/style/css";
+import "element-plus/es/components/message-box/style/css";
+
 // 导入统一的样式入口
 import "./styles/index.scss";
 

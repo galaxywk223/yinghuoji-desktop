@@ -160,18 +160,6 @@ pub fn initialize_database(state: &AppState) -> Result<()> {
         "INSERT OR IGNORE INTO app_setting (key, value, updated_at) VALUES ('active_stage_id', '0', ?)",
         params![now_local_iso()],
     )?;
-    conn.execute(
-        "INSERT OR IGNORE INTO app_setting (key, value, updated_at) VALUES ('ai_enabled', 'true', ?)",
-        params![now_local_iso()],
-    )?;
-    conn.execute(
-        "INSERT OR IGNORE INTO app_setting (key, value, updated_at) VALUES ('ai_model_name', 'qwen-plus-2025-07-28', ?)",
-        params![now_local_iso()],
-    )?;
-    conn.execute(
-        "INSERT OR IGNORE INTO app_setting (key, value, updated_at) VALUES ('ai_base_url', 'https://dashscope.aliyuncs.com/compatible-mode/v1', ?)",
-        params![now_local_iso()],
-    )?;
     Ok(())
 }
 

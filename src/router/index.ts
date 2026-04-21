@@ -11,6 +11,7 @@ const MainLayout = () => import("@/components/layout/MainLayout.vue");
 
 const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/dashboard" },
+  { path: "/ai", redirect: "/dashboard" },
   {
     path: "/",
     component: MainLayout,
@@ -71,27 +72,19 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "统计分析" },
       },
       {
-        path: "ai",
-        name: "AIAssistant",
-        component: () => import("@/views/ai/AIAssistantView.vue"),
-        meta: { title: "智能规划" },
-      },
-      {
         path: "settings",
         component: () => import("@/views/settings/SettingsLayout.vue"),
         redirect: "/settings/data",
         children: [
           {
+            path: "ai",
+            redirect: "/settings/data",
+          },
+          {
             path: "data",
             name: "SettingsData",
             component: () => import("@/views/settings/Data.vue"),
             meta: { title: "数据管理" },
-          },
-          {
-            path: "ai",
-            name: "SettingsAI",
-            component: () => import("@/views/settings/AIConfig.vue"),
-            meta: { title: "AI 配置" },
           },
           // 新增：阶段管理（与顶层 /stages 复用同一组件）
           {
