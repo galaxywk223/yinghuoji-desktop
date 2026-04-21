@@ -5706,7 +5706,7 @@ dependencies = [
 
 [[package]]
 name = "yinghuoji_desktop"
-version = "3.0.3"
+version = "3.0.4"
 dependencies = [
  "anyhow",
  "chrono",
