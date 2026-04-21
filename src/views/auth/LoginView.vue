@@ -3,7 +3,7 @@
     <div :class="styles.loginCard">
       <div :class="styles.header">
         <div :class="styles.logo">
-          <Icon icon="lucide:book-open" />
+          <BrandMark />
         </div>
         <div :class="styles.headerText">
           <h2>萤火集</h2>
@@ -68,7 +68,7 @@
 import { ref, reactive } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/modules/auth";
-import { Icon } from "@iconify/vue";
+import BrandMark from "@/components/common/BrandMark.vue";
 import styles from "@/styles/views/auth/LoginView.module.scss";
 
 const router = useRouter();

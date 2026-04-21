@@ -41,14 +41,17 @@
 }
 
 .sidebar-header__brand {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 48px;
+  height: 48px;
+  padding: 6px;
+  border-radius: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-strong) 100%);
-  color: var(--text-inverse);
+  background:
+    radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--brand-accent) 24%, transparent) 0%, transparent 34%),
+    linear-gradient(145deg, color-mix(in srgb, var(--brand-primary-strong) 92%, #233248) 0%, #223047 100%);
+  border: 1px solid color-mix(in srgb, var(--brand-primary-soft) 22%, transparent);
   box-shadow: var(--shadow-1);
 }
 

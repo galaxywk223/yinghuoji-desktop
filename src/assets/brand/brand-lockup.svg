@@ -1,13 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88" viewBox="0 0 88 88" fill="none">
-  <rect width="88" height="88" rx="22" fill="#223047" />
-  <rect x="3" y="3" width="82" height="82" rx="19" stroke="#FFFFFF" stroke-opacity="0.09" stroke-width="2" />
+<svg xmlns="http://www.w3.org/2000/svg" width="308" height="88" viewBox="0 0 308 88" fill="none">
   <path
     d="M44 13.5L74.5 44L44 74.5L13.5 44L44 13.5Z"
     stroke="#DDE5F2"
     stroke-width="5.5"
     stroke-linejoin="round"
     stroke-linecap="round"
-    opacity="0.94"
+    opacity="0.92"
   />
   <rect x="34.5" y="9.5" width="19" height="19" rx="6.5" transform="rotate(45 44 19)" fill="#DDE5F2" />
   <rect x="59.5" y="34.5" width="19" height="19" rx="6.5" transform="rotate(45 69 44)" fill="#6D84B3" />
@@ -15,6 +13,17 @@
   <rect x="9.5" y="34.5" width="19" height="19" rx="6.5" transform="rotate(45 19 44)" fill="#90A3C7" />
   <circle cx="44" cy="44" r="7.5" fill="#BE8A46" />
   <circle cx="23" cy="26.5" r="4" fill="#CE9A58" fill-opacity="0.88" />
-  <circle cx="16.5" cy="19.5" r="2.75" fill="#DDE5F2" fill-opacity="0.92" />
-  <circle cx="67" cy="61.5" r="3.25" fill="#DDE5F2" fill-opacity="0.84" />
+  <circle cx="16.5" cy="19.5" r="2.75" fill="#DDE5F2" fill-opacity="0.9" />
+  <circle cx="67" cy="61.5" r="3.25" fill="#DDE5F2" fill-opacity="0.82" />
+  <text
+    x="108"
+    y="55"
+    fill="#223047"
+    font-size="34"
+    font-weight="800"
+    letter-spacing="-0.04em"
+    font-family="Inter, PingFang SC, Microsoft YaHei, Segoe UI, sans-serif"
+  >
+    萤火集
+  </text>
 </svg>

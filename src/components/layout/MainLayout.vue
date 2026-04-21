@@ -16,7 +16,7 @@
     >
       <div class="sidebar-header">
         <div class="sidebar-header__brand">
-          <Icon icon="lucide:book-marked" />
+          <BrandMark />
         </div>
         <div class="sidebar-header__copy">
           <span class="sidebar-header__eyebrow">Learning OS</span>
@@ -98,6 +98,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { Icon } from "@iconify/vue";
 import { useSettingsStore } from "@/stores/modules/settings";
+import BrandMark from "@/components/common/BrandMark.vue";
 import ThemeSwitcher from "@/components/common/ThemeSwitcher.vue";
 
 const route = useRoute();

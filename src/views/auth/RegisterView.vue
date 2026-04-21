@@ -3,7 +3,7 @@
     <div :class="styles.registerCard">
       <div :class="styles.header">
         <div :class="styles.logo">
-          <Icon icon="lucide:user-plus" />
+          <BrandMark />
         </div>
         <div :class="styles.headerText">
           <h2>加入萤火集</h2>
@@ -95,7 +95,7 @@
 import { ref, reactive, computed } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/modules/auth";
-import { Icon } from "@iconify/vue";
+import BrandMark from "@/components/common/BrandMark.vue";
 import styles from "@/styles/views/auth/RegisterView.module.scss";
 
 const router = useRouter();
