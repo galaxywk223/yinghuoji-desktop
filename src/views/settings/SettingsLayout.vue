@@ -25,6 +25,10 @@
               <Icon icon="lucide:message-square-quote" />
               <span>格言管理</span>
             </router-link>
+            <router-link to="/settings/about" class="settings-nav-item">
+              <Icon icon="lucide:info" />
+              <span>关于与更新</span>
+            </router-link>
           </nav>
         </aside>
         <main class="settings-content">

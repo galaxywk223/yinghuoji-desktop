@@ -107,6 +107,12 @@ const routes: RouteRecordRaw[] = [
             component: () => import("@/views/settings/MottoManagement.vue"),
             meta: { title: "格言管理" },
           },
+          {
+            path: "about",
+            name: "SettingsAboutUpdate",
+            component: () => import("@/views/settings/AboutUpdate.vue"),
+            meta: { title: "关于与更新" },
+          },
         ],
       },
     ],
