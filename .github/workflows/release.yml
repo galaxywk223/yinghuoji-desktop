@@ -52,7 +52,7 @@ jobs:
         run: npm run type-check
 
       - name: Build and publish desktop release
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@v0.6.2
         with:
           tagName: v__VERSION__
           releaseName: 萤火集桌面端 v__VERSION__
