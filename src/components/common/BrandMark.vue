@@ -9,49 +9,10 @@
     :aria-label="decorative ? undefined : '萤火集标识'"
   >
     <path
-      class="brand-mark__orbit"
-      d="M44 13.5L74.5 44L44 74.5L13.5 44L44 13.5Z"
+      class="brand-mark__trail"
+      d="M23 59C23 43 32 30 45 24C52 20.8 58.8 21.8 64 27"
     />
-    <rect
-      class="brand-mark__node brand-mark__node--north"
-      x="34.5"
-      y="9.5"
-      width="19"
-      height="19"
-      rx="6.5"
-      transform="rotate(45 44 19)"
-    />
-    <rect
-      class="brand-mark__node brand-mark__node--east"
-      x="59.5"
-      y="34.5"
-      width="19"
-      height="19"
-      rx="6.5"
-      transform="rotate(45 69 44)"
-    />
-    <rect
-      class="brand-mark__node brand-mark__node--south"
-      x="34.5"
-      y="59.5"
-      width="19"
-      height="19"
-      rx="6.5"
-      transform="rotate(45 44 69)"
-    />
-    <rect
-      class="brand-mark__node brand-mark__node--west"
-      x="9.5"
-      y="34.5"
-      width="19"
-      height="19"
-      rx="6.5"
-      transform="rotate(45 19 44)"
-    />
-    <circle class="brand-mark__spark brand-mark__spark--core" cx="44" cy="44" r="7.5" />
-    <circle class="brand-mark__spark brand-mark__spark--trail-large" cx="23" cy="26.5" r="4" />
-    <circle class="brand-mark__spark brand-mark__spark--trail-small" cx="16.5" cy="19.5" r="2.75" />
-    <circle class="brand-mark__spark brand-mark__spark--echo" cx="67" cy="61.5" r="3.25" />
+    <circle class="brand-mark__core" cx="61" cy="30" r="9" />
   </svg>
 </template>
 
@@ -74,51 +35,16 @@ withDefaults(
   overflow: visible;
 }
 
-.brand-mark__orbit {
-  stroke: var(--brand-primary-soft, #dde5f2);
-  stroke-width: 5.5;
-  stroke-linejoin: round;
+.brand-mark__trail {
+  fill: none;
+  stroke: var(--brand-primary, #6d84b3);
+  stroke-width: 6;
   stroke-linecap: round;
-  opacity: 0.92;
+  stroke-linejoin: round;
+  opacity: 0.78;
 }
 
-.brand-mark__node {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.brand-mark__node--north {
-  fill: var(--brand-primary-soft, #dde5f2);
-}
-
-.brand-mark__node--east {
-  fill: var(--brand-primary, #6d84b3);
-}
-
-.brand-mark__node--south {
-  fill: var(--brand-primary-strong, #526c99);
-}
-
-.brand-mark__node--west {
-  fill: color-mix(in srgb, var(--brand-primary, #6d84b3) 78%, white);
-}
-
-.brand-mark__spark--core {
+.brand-mark__core {
   fill: var(--brand-accent, #be8a46);
-}
-
-.brand-mark__spark--trail-large {
-  fill: color-mix(in srgb, var(--brand-accent, #be8a46) 86%, white);
-  opacity: 0.88;
-}
-
-.brand-mark__spark--trail-small {
-  fill: var(--brand-primary-soft, #dde5f2);
-  opacity: 0.9;
-}
-
-.brand-mark__spark--echo {
-  fill: var(--brand-primary-soft, #dde5f2);
-  opacity: 0.82;
 }
 </style>

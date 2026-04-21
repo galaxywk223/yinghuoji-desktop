@@ -41,18 +41,12 @@
 }
 
 .sidebar-header__brand {
-  width: 48px;
-  height: 48px;
-  padding: 6px;
-  border-radius: 16px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--brand-accent) 24%, transparent) 0%, transparent 34%),
-    linear-gradient(145deg, color-mix(in srgb, var(--brand-primary-strong) 92%, #233248) 0%, #223047 100%);
-  border: 1px solid color-mix(in srgb, var(--brand-primary-soft) 22%, transparent);
-  box-shadow: var(--shadow-1);
 }
 
 .sidebar-header__copy {

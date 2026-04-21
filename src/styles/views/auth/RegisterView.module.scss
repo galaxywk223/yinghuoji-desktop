@@ -28,18 +28,12 @@
 }
 
 .logo {
-  width: 58px;
-  height: 58px;
-  padding: 9px;
-  border-radius: 20px;
+  width: 46px;
+  height: 46px;
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--brand-accent) 24%, transparent) 0%, transparent 32%),
-    linear-gradient(145deg, color-mix(in srgb, var(--brand-primary-strong) 90%, #243248) 0%, #223047 100%);
-  border: 1px solid color-mix(in srgb, var(--brand-primary-soft) 22%, transparent);
-  box-shadow: var(--shadow-1);
 }
 
 .headerText {
