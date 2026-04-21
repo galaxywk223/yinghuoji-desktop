@@ -16,6 +16,7 @@ import zhCn from "element-plus/es/locale/lang/zh-cn";
 import { useAuthStore } from "@/stores/modules/auth";
 import { useSettingsStore } from "@/stores/modules/settings";
 import { useThemeStore } from "@/stores/modules/theme";
+import { scheduleStartupUpdateCheck } from "@/utils/updater";
 
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
@@ -25,6 +26,7 @@ onMounted(() => {
   themeStore.initTheme();
   void authStore.checkAuth();
   void settingsStore.fetchSettings();
+  scheduleStartupUpdateCheck();
 });
 </script>
 

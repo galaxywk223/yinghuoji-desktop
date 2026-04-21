@@ -4,10 +4,7 @@ mod models;
 
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use tauri::{
@@ -20,6 +17,25 @@ const MAIN_WINDOW_LABEL: &str = "main";
 const TRAY_ID: &str = "main-tray";
 const TRAY_SHOW_ID: &str = "tray-show-main";
 const TRAY_EXIT_ID: &str = "tray-exit-app";
+
+#[derive(Default)]
+pub struct AppLifecycleState {
+    exit_requested: AtomicBool,
+}
+
+impl AppLifecycleState {
+    pub fn mark_exit_requested(&self) {
+        self.exit_requested.store(true, Ordering::SeqCst);
+    }
+
+    pub fn clear_exit_requested(&self) {
+        self.exit_requested.store(false, Ordering::SeqCst);
+    }
+
+    pub fn is_exit_requested(&self) -> bool {
+        self.exit_requested.load(Ordering::SeqCst)
+    }
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -90,18 +106,15 @@ fn restore_main_window<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-fn request_app_exit<R: Runtime>(app: &AppHandle<R>, exit_requested: &AtomicBool) {
-    exit_requested.store(true, Ordering::SeqCst);
+fn request_app_exit<R: Runtime>(app: &AppHandle<R>, lifecycle_state: &AppLifecycleState) {
+    lifecycle_state.mark_exit_requested();
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         let _ = window.set_skip_taskbar(false);
     }
     app.exit(0);
 }
 
-fn build_tray<R: Runtime>(
-    app: &AppHandle<R>,
-    exit_requested: Arc<AtomicBool>,
-) -> anyhow::Result<()> {
+fn build_tray<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
     let show_item = MenuItem::with_id(app, TRAY_SHOW_ID, "显示主窗口", true, None::<&str>)?;
     let exit_item = MenuItem::with_id(app, TRAY_EXIT_ID, "退出应用", true, None::<&str>)?;
     let tray_menu = Menu::with_items(app, &[&show_item, &exit_item])?;
@@ -112,14 +125,12 @@ fn build_tray<R: Runtime>(
         .menu(&tray_menu)
         .tooltip("萤火集桌面端")
         .show_menu_on_left_click(false)
-        .on_menu_event({
-            let exit_requested = exit_requested.clone();
-            move |app, event: tauri::menu::MenuEvent| {
-                if event.id() == &show_id {
-                    restore_main_window(app);
-                } else if event.id() == &exit_id {
-                    request_app_exit(app, exit_requested.as_ref());
-                }
+        .on_menu_event(move |app, event: tauri::menu::MenuEvent| {
+            if event.id() == &show_id {
+                restore_main_window(app);
+            } else if event.id() == &exit_id {
+                let lifecycle_state = app.state::<AppLifecycleState>();
+                request_app_exit(app, &lifecycle_state);
             }
         })
         .on_tray_icon_event(|tray: &tauri::tray::TrayIcon<R>, event: TrayIconEvent| {
@@ -142,14 +153,11 @@ fn build_tray<R: Runtime>(
 }
 
 pub fn run() {
-    let exit_requested = Arc::new(AtomicBool::new(false));
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .setup({
-            let exit_requested = exit_requested.clone();
-            move |app| {
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(move |app| {
             let base_dir = app
                 .path()
                 .app_data_dir()
@@ -169,27 +177,27 @@ pub fn run() {
 
             db::initialize_database(&state)?;
             app.manage(state);
-            build_tray(app.handle(), exit_requested.clone())?;
+            app.manage(AppLifecycleState::default());
+            build_tray(app.handle())?;
             Ok(())
-        }
         })
-        .on_window_event({
-            let exit_requested = exit_requested.clone();
-            move |window, event| {
-                if window.label() != MAIN_WINDOW_LABEL {
+        .on_window_event(move |window, event| {
+            if window.label() != MAIN_WINDOW_LABEL {
+                return;
+            }
+
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let lifecycle_state = window.state::<AppLifecycleState>();
+                if lifecycle_state.is_exit_requested() {
                     return;
                 }
-
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    if exit_requested.load(Ordering::SeqCst) {
-                        return;
-                    }
-                    api.prevent_close();
-                    hide_main_window(window);
-                }
+                api.prevent_close();
+                hide_main_window(window);
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::app_prepare_exit_for_update,
+            commands::app_cancel_exit_for_update,
             commands::profile_get,
             commands::profile_update,
             commands::settings_get,

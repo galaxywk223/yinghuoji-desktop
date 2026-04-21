@@ -1,15 +1,41 @@
 use chrono::{Duration, Local, Utc};
 use rusqlite::params;
 use serde_json::json;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use crate::models::{ProfileUpdatePayload, SettingItemPayload};
-use crate::{AppResult, AppState};
+use crate::{AppLifecycleState, AppResult, AppState};
 
 use super::common::{
     connection, dashboard_greeting, profile_json, recent_records_json, settings_json,
 };
 use crate::db;
+
+#[tauri::command]
+pub fn app_prepare_exit_for_update(
+    app: AppHandle,
+    lifecycle_state: State<'_, AppLifecycleState>,
+) -> AppResult<serde_json::Value> {
+    lifecycle_state.mark_exit_requested();
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_skip_taskbar(false);
+    }
+    Ok(json!({
+        "success": true,
+        "message": "已准备进入更新安装流程"
+    }))
+}
+
+#[tauri::command]
+pub fn app_cancel_exit_for_update(
+    lifecycle_state: State<'_, AppLifecycleState>,
+) -> AppResult<serde_json::Value> {
+    lifecycle_state.clear_exit_requested();
+    Ok(json!({
+        "success": true,
+        "message": "已恢复正常关闭拦截状态"
+    }))
+}
 
 #[tauri::command]
 pub fn profile_get(state: State<'_, AppState>) -> AppResult<serde_json::Value> {
