@@ -5,9 +5,9 @@
 export default {
   // 应用信息
   app: {
-    name: "学习工作台",
+    name: "萤火集",
     version: "2.0.0",
-    description: "学习工作台：本地优先的学习记录与专注管理工具",
+    description: "萤火集：本地优先的学习记录与专注管理工具",
   },
 
   // API 配置

@@ -34,7 +34,7 @@ const THEME_OPTIONS: ThemeOption[] = [
     name: "纸感晨雾",
     mode: "light",
     preview: "linear-gradient(135deg, #8a9bce 0%, #f2ebdc 100%)",
-    description: "默认主题，灰蓝与暖米白的学习工作台。",
+    description: "默认主题，灰蓝与暖米白的萤火集界面。",
   },
   {
     id: "midnight",
