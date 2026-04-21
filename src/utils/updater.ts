@@ -6,7 +6,7 @@ import { ElLoading, ElMessage, ElMessageBox } from "element-plus";
 import tauriConfig from "../../src-tauri/tauri.conf.json";
 
 const STARTUP_CHECK_DELAY_MS = 1800;
-const FALLBACK_APP_NAME = tauriConfig.productName || "萤火集桌面端";
+const FALLBACK_APP_NAME = tauriConfig.productName || "学习工作台";
 const FALLBACK_APP_VERSION = tauriConfig.version || "0.0.0";
 
 export type UpdateCheckSource = "startup" | "manual";

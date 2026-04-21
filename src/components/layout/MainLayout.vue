@@ -20,7 +20,7 @@
         </div>
         <div class="sidebar-header__copy">
           <span class="sidebar-header__eyebrow">Learning OS</span>
-          <span class="logo-text">萤火集</span>
+          <span class="logo-text">学习工作台</span>
         </div>
       </div>
 
@@ -42,7 +42,7 @@
 
       <div class="sidebar-footer">
         <p>记录、分析、规划。让学习节奏更清晰。</p>
-        <p>萤火集 3.0</p>
+        <p>学习工作台 3.0</p>
       </div>
     </aside>
 
@@ -117,7 +117,7 @@ const navItems = [
 
 const currentRouteTitle = computed(() => {
   const match = navItems.find((item) => route.path.startsWith(item.to));
-  return (route.meta.title as string) || match?.label || "萤火集";
+  return (route.meta.title as string) || match?.label || "学习工作台";
 });
 
 const toggleNavigation = () => {

@@ -6,7 +6,7 @@
           <BrandMark />
         </div>
         <div :class="styles.headerText">
-          <h2>萤火集</h2>
+          <h2>学习工作台</h2>
           <p>多端同步 · 数据可视 · 学习归档</p>
         </div>
       </div>

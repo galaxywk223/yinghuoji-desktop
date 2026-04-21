@@ -2,7 +2,7 @@
   <div class="settings-shell">
     <PageContainer
       :title="{ icon: 'lucide:settings-2', text: '设置中心' }"
-      subtitle="个性化您的萤火集体验"
+      subtitle="个性化您的学习工作台体验"
       :custom-class="'settings-layout-container'"
       max-width="wide"
     >

@@ -6,7 +6,7 @@
     xmlns="http://www.w3.org/2000/svg"
     role="img"
     :aria-hidden="decorative"
-    :aria-label="decorative ? undefined : '萤火集标识'"
+    :aria-label="decorative ? undefined : '学习工作台标识'"
   >
     <path
       class="brand-mark__orbit"

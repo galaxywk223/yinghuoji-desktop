@@ -6,7 +6,7 @@
           <BrandMark />
         </div>
         <div :class="styles.headerText">
-          <h2>加入萤火集</h2>
+          <h2>学习工作台</h2>
           <p>三步完成注册，点亮你的学习旅程</p>
         </div>
       </div>

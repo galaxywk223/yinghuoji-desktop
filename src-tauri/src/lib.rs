@@ -123,7 +123,7 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
 
     let mut tray = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&tray_menu)
-        .tooltip("萤火集桌面端")
+        .tooltip("学习工作台")
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event: tauri::menu::MenuEvent| {
             if event.id() == &show_id {
