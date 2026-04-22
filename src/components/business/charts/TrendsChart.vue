@@ -794,19 +794,22 @@ const chartOption = computed(() => {
 
   const token = themeTokens.value;
 
-  // Apple-style Colors
   const colors = {
     duration: {
-      line: token.primary,
-      areaStart: token.primarySoft,
-      areaEnd: "rgba(88, 86, 214, 0.02)",
-      ongoing: token.success,
+      line: "#B5823C",
+      shadow: "rgba(181, 130, 60, 0.28)",
+      areaStart: "rgba(181, 130, 60, 0.2)",
+      areaEnd: "rgba(181, 130, 60, 0.03)",
+      band: "rgba(181, 130, 60, 0.11)",
+      ongoing: "#8F6334",
     },
     efficiency: {
-      line: token.warning,
-      areaStart: token.warningSoft,
-      areaEnd: "rgba(255, 149, 0, 0.02)",
-      ongoing: token.info,
+      line: "#4E86A6",
+      shadow: "rgba(78, 134, 166, 0.24)",
+      areaStart: "rgba(78, 134, 166, 0.18)",
+      areaEnd: "rgba(78, 134, 166, 0.02)",
+      band: "rgba(78, 134, 166, 0.1)",
+      ongoing: "#3E6B84",
     },
   };
 
@@ -959,9 +962,9 @@ const chartOption = computed(() => {
               shadowBlur: 2,
               shadowColor: "rgba(0,0,0,0.1)",
             },
-            fillerColor: token.primarySoft,
+            fillerColor: "rgba(134, 142, 156, 0.16)",
             borderColor: "transparent",
-            backgroundColor: token.subtle,
+            backgroundColor: "rgba(134, 142, 156, 0.08)",
             showDataShadow: false,
             showDetail: false,
           },
@@ -1016,7 +1019,7 @@ const chartOption = computed(() => {
         },
         lineStyle: {
           width: 3,
-          shadowColor: "rgba(88, 86, 214, 0.3)",
+          shadowColor: colors.duration.shadow,
           shadowBlur: 10,
           shadowOffsetY: 4,
         },
@@ -1086,7 +1089,7 @@ const chartOption = computed(() => {
         stack: "duration-forecast-band",
         lineStyle: { opacity: 0 },
         areaStyle: {
-          color: "rgba(88, 86, 214, 0.12)",
+          color: colors.duration.band,
         },
         tooltip: { show: false },
       },
@@ -1125,7 +1128,7 @@ const chartOption = computed(() => {
         lineStyle: {
           width: 3,
           color: colors.efficiency.line,
-          shadowColor: "rgba(255, 149, 0, 0.3)",
+          shadowColor: colors.efficiency.shadow,
           shadowBlur: 10,
           shadowOffsetY: 4,
         },
@@ -1192,7 +1195,7 @@ const chartOption = computed(() => {
         stack: "efficiency-forecast-band",
         lineStyle: { opacity: 0 },
         areaStyle: {
-          color: "rgba(255, 149, 0, 0.12)",
+          color: colors.efficiency.band,
         },
         tooltip: { show: false },
       },
