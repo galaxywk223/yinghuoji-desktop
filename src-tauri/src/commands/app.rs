@@ -104,20 +104,25 @@ pub fn dashboard_summary(state: State<'_, AppState>) -> AppResult<serde_json::Va
         conn.query_row("SELECT COUNT(*) FROM milestone", [], |row| row.get(0))?;
     let countdown_total: i64 =
         conn.query_row("SELECT COUNT(*) FROM countdown_event", [], |row| row.get(0))?;
+    let now_utc = Utc::now();
     let next_countdown = conn
         .query_row(
-            "SELECT title, target_datetime_utc FROM countdown_event ORDER BY target_datetime_utc ASC LIMIT 1",
-            [],
+            "SELECT title, target_datetime_utc
+             FROM countdown_event
+             WHERE target_datetime_utc >= ?1
+             ORDER BY target_datetime_utc ASC
+             LIMIT 1",
+            params![now_utc.to_rfc3339()],
             |row| {
                 let title: String = row.get(0)?;
                 let target: String = row.get(1)?;
                 let target_dt = db::parse_rfc3339(&target)
                     .map_err(|_| rusqlite::Error::InvalidQuery)?;
-                let remaining_days = (target_dt.date_naive() - Utc::now().date_naive())
-                    .num_days()
-                    .max(0);
+                let remaining_days =
+                    (target_dt.date_naive() - now_utc.date_naive()).num_days().max(0);
                 Ok(json!({
                     "title": title,
+                    "target_datetime_utc": target,
                     "remaining_days": remaining_days
                 }))
             },

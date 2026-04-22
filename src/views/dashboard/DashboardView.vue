@@ -38,7 +38,7 @@
       </article>
       <article class="kpi-card">
         <span class="kpi-card__label">下个目标</span>
-        <strong>{{ countdownDays }} 天</strong>
+        <strong>{{ countdownDisplayValue }}</strong>
         <p>{{ countdownTitle }}</p>
       </article>
       <article class="kpi-card">
@@ -262,9 +262,24 @@ const countdownDays = computed(() => {
   return Math.max(next?.remaining_days ?? 0, 0);
 });
 
-const countdownTitle = computed(
-  () => dashboardStore.summary?.next_countdown?.title || "暂时没有倒计时",
-);
+const countdownDisplayValue = computed(() => {
+  const next = dashboardStore.summary?.next_countdown;
+  if (!next) {
+    return "暂无";
+  }
+  if (countdownDays.value === 0) {
+    return "今天";
+  }
+  return `${countdownDays.value} 天`;
+});
+
+const countdownTitle = computed(() => {
+  const next = dashboardStore.summary?.next_countdown;
+  if (!next) {
+    return "当前没有进行中的目标";
+  }
+  return next.title || "当前没有进行中的目标";
+});
 
 const milestoneCount = computed(
   () => dashboardStore.summary?.milestones_count ?? 0,
