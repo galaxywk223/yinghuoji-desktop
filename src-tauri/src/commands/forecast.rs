@@ -7,12 +7,18 @@ use std::thread;
 use anyhow::{anyhow, Result};
 use chrono::{Duration, Local, NaiveDate};
 use serde_json::{json, Value};
+use smartcore::linalg::basic::arrays::Array;
+use smartcore::linalg::basic::matrix::DenseMatrix;
+use smartcore::linear::logistic_regression::{
+    LogisticRegression, LogisticRegressionParameters,
+};
+use smartcore::xgboost::{XGRegressor, XGRegressorParameters};
 
 use crate::{db, AppState};
 
 pub const UNAVAILABLE_REASON: &str = "历史数据不足，暂不提供预测";
 pub const MODEL_FAILURE_REASON: &str = "预测模型训练失败，暂不提供预测";
-pub const LOW_CONFIDENCE_REASON: &str = "历史回测误差较高，暂不显示预测";
+pub const LOW_CONFIDENCE_REASON: &str = "历史回测误差较高，已回退到保守基线预测";
 pub const PENDING_FORECAST_REASON: &str = "预测计算中，请稍后刷新";
 pub const FORECAST_ERROR_REASON: &str = "预测生成失败，请稍后重试";
 pub const CONFIDENCE_LEVEL: f64 = 0.8;
@@ -33,6 +39,11 @@ const DAILY_LAGS: [usize; 4] = [1, 7, 14, 28];
 const DAILY_WINDOWS: [usize; 3] = [7, 14, 28];
 const WEEKLY_LAGS: [usize; 4] = [1, 2, 4, 8];
 const WEEKLY_WINDOWS: [usize; 2] = [4, 8];
+const DAILY_RECENT_WINDOW: usize = 56;
+const WEEKLY_RECENT_WINDOW: usize = 16;
+
+type BinaryLogisticRegression = LogisticRegression<f64, u32, DenseMatrix<f64>, Vec<u32>>;
+type SmartcoreXGRegressor = XGRegressor<f64, f64, DenseMatrix<f64>, Vec<f64>>;
 
 static FORECAST_CACHE: LazyLock<Mutex<HashMap<String, Value>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -110,6 +121,7 @@ pub fn default_forecast(status: &str, reason: &str) -> Value {
         "baseline_wape": Value::Null,
         "baseline_rmse": Value::Null,
         "model_candidates": Vec::<Value>::new(),
+        "fallback_from_model": Value::Null,
         "available": false,
         "reason": reason,
         "status": status,
@@ -147,9 +159,24 @@ pub fn mark_forecast_bundle_ready(forecast_bundle: Value) -> Value {
                 .get("available")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
+            let current_status = object
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or("unavailable");
             object.insert(
                 "status".to_string(),
-                Value::String(if available { "ready" } else { "unavailable" }.to_string()),
+                Value::String(
+                    if available {
+                        if current_status == "conservative" {
+                            "conservative"
+                        } else {
+                            "ready"
+                        }
+                    } else {
+                        "unavailable"
+                    }
+                    .to_string(),
+                ),
             );
         }
         marked.insert(dataset_key.to_string(), forecast);
@@ -272,6 +299,8 @@ enum Model {
     SeasonalNaive,
     Ridge,
     RecentRidge { window: usize },
+    LogXgBoost { window: Option<usize> },
+    TwoStageDuration { window: Option<usize> },
     Blend { components: Vec<(Box<Model>, f64)> },
 }
 
@@ -377,17 +406,29 @@ fn create_forecast(
         return Ok(empty_forecast(&future_labels, config.horizon, history_points, UNAVAILABLE_REASON, None, None, None, None, None, vec![], "unavailable"));
     }
 
-    let recent_window = if target_kind == "weekly" { 16 } else { 56 };
+    let recent_window = recent_window(config);
     let mut candidates = Vec::new();
     for (name, model) in [
         ("Seasonal Naive", Model::SeasonalNaive),
         ("Ridge Autoregression", Model::Ridge),
         ("Recent Ridge Autoregression", Model::RecentRidge { window: recent_window }),
     ] {
-        if let Ok((wape, rmse, residuals)) = backtest(&model, &history, config, exog_history) {
-            if wape.is_finite() && rmse.is_finite() {
-                candidates.push(Candidate { name: name.to_string(), model, wape, rmse, residuals });
-            }
+        push_candidate(&mut candidates, name, model, &history, config, exog_history);
+    }
+    if target_kind == "duration" {
+        for (name, model) in [
+            ("Two-Stage Duration Autoregression", Model::TwoStageDuration { window: None }),
+            ("Log-XGBoost Autoregression", Model::LogXgBoost { window: None }),
+            ("Recent Log-XGBoost Autoregression", Model::LogXgBoost { window: Some(recent_window) }),
+        ] {
+            push_candidate(&mut candidates, name, model, &history, config, exog_history);
+        }
+    } else {
+        for (name, model) in [
+            ("Log-XGBoost Autoregression", Model::LogXgBoost { window: None }),
+            ("Recent Log-XGBoost Autoregression", Model::LogXgBoost { window: Some(recent_window) }),
+        ] {
+            push_candidate(&mut candidates, name, model, &history, config, exog_history);
         }
     }
     let ranked = ranked_candidates(&candidates);
@@ -407,46 +448,18 @@ fn create_forecast(
     let selected = ranked.first().cloned().ok_or_else(|| anyhow!("no forecast candidate selected"))?;
     let baseline = candidates.iter().find(|c| c.name == "Seasonal Naive");
     let serialized = serialize_candidates(&candidates, &selected.name);
-    if selected.wape > ACCURACY_GATE_WAPE {
-        return Ok(empty_forecast(
-            &future_labels,
-            config.horizon,
-            history_points,
-            LOW_CONFIDENCE_REASON,
-            Some(selected.name),
-            Some(selected.wape),
-            Some(selected.rmse / display_divisor.max(1.0)),
-            baseline.map(|c| c.wape),
-            baseline.map(|c| c.rmse / display_divisor.max(1.0)),
-            serialized,
-            "unavailable",
-        ));
-    }
-
-    let prediction = run_model(&selected.model, &history, config, config.horizon, exog_history, future_exog)?;
-    let (lower, upper) = intervals(&prediction, &selected.residuals);
-    let divisor = display_divisor.max(1.0);
-    Ok(json!({
-        "labels": future_labels,
-        "prediction": prediction.iter().map(|v| round2((v / divisor).max(0.0))).collect::<Vec<_>>(),
-        "lower": lower.iter().map(|v| round2((v / divisor).max(0.0))).collect::<Vec<_>>(),
-        "upper": upper.iter().map(|v| round2((v / divisor).max(0.0))).collect::<Vec<_>>(),
-        "model_name": selected.name,
-        "history_points": history_points,
-        "horizon": config.horizon,
-        "trained_on": "all_history",
-        "confidence_level": CONFIDENCE_LEVEL,
-        "accuracy_threshold": ACCURACY_GATE_WAPE,
-        "selection_strategy": MODEL_SELECTION_STRATEGY,
-        "validation_wape": round_metric(Some(selected.wape)),
-        "validation_rmse": round_metric(Some(selected.rmse / divisor)),
-        "baseline_wape": round_metric(baseline.map(|c| c.wape)),
-        "baseline_rmse": round_metric(baseline.map(|c| c.rmse / divisor)),
-        "model_candidates": serialized,
-        "available": true,
-        "reason": "",
-        "status": "ready",
-    }))
+    finalize_selected_forecast(
+        &future_labels,
+        &history,
+        history_points,
+        config,
+        &selected,
+        baseline,
+        serialized,
+        display_divisor,
+        exog_history,
+        future_exog,
+    )
 }
 
 fn empty_forecast(labels: &[String], horizon: usize, history_points: usize, reason: &str, model_name: Option<String>, validation_wape: Option<f64>, validation_rmse: Option<f64>, baseline_wape: Option<f64>, baseline_rmse: Option<f64>, model_candidates: Vec<Value>, status: &str) -> Value {
@@ -467,10 +480,145 @@ fn empty_forecast(labels: &[String], horizon: usize, history_points: usize, reas
         "baseline_wape": round_metric(baseline_wape),
         "baseline_rmse": round_metric(baseline_rmse),
         "model_candidates": model_candidates,
+        "fallback_from_model": Value::Null,
         "available": false,
         "reason": reason,
         "status": status,
     })
+}
+
+fn populated_forecast(
+    labels: &[String],
+    prediction: &[f64],
+    lower: &[f64],
+    upper: &[f64],
+    history_points: usize,
+    horizon: usize,
+    model_name: &str,
+    validation_wape: f64,
+    validation_rmse: f64,
+    baseline_wape: f64,
+    baseline_rmse: f64,
+    model_candidates: Vec<Value>,
+    display_divisor: f64,
+    reason: &str,
+    status: &str,
+    fallback_from_model: Option<&str>,
+) -> Value {
+    let divisor = display_divisor.max(1.0);
+    json!({
+        "labels": labels,
+        "prediction": prediction.iter().map(|v| round2((v / divisor).max(0.0))).collect::<Vec<_>>(),
+        "lower": lower.iter().map(|v| round2((v / divisor).max(0.0))).collect::<Vec<_>>(),
+        "upper": upper.iter().map(|v| round2((v / divisor).max(0.0))).collect::<Vec<_>>(),
+        "model_name": model_name,
+        "history_points": history_points,
+        "horizon": horizon,
+        "trained_on": "all_history",
+        "confidence_level": CONFIDENCE_LEVEL,
+        "accuracy_threshold": ACCURACY_GATE_WAPE,
+        "selection_strategy": MODEL_SELECTION_STRATEGY,
+        "validation_wape": round_metric(Some(validation_wape)),
+        "validation_rmse": round_metric(Some(validation_rmse / divisor)),
+        "baseline_wape": round_metric(Some(baseline_wape)),
+        "baseline_rmse": round_metric(Some(baseline_rmse / divisor)),
+        "model_candidates": model_candidates,
+        "fallback_from_model": fallback_from_model,
+        "available": true,
+        "reason": reason,
+        "status": status,
+    })
+}
+
+fn finalize_selected_forecast(
+    future_labels: &[String],
+    history: &[f64],
+    history_points: usize,
+    config: ForecastConfig,
+    selected: &Candidate,
+    baseline: Option<&Candidate>,
+    serialized: Vec<Value>,
+    display_divisor: f64,
+    exog_history: Option<&[Vec<f64>]>,
+    future_exog: Option<&[Vec<f64>]>,
+) -> Result<Value> {
+    if selected.wape > ACCURACY_GATE_WAPE {
+        if let Some(baseline) = baseline {
+            let prediction = run_model(
+                &baseline.model,
+                history,
+                config,
+                config.horizon,
+                exog_history,
+                future_exog,
+            )?;
+            let (lower, upper) = intervals(&prediction, &baseline.residuals);
+            let fallback_from_model = if baseline.name == selected.name {
+                None
+            } else {
+                Some(selected.name.as_str())
+            };
+            return Ok(populated_forecast(
+                future_labels,
+                &prediction,
+                &lower,
+                &upper,
+                history_points,
+                config.horizon,
+                baseline.name.as_str(),
+                baseline.wape,
+                baseline.rmse,
+                baseline.wape,
+                baseline.rmse,
+                serialized,
+                display_divisor,
+                LOW_CONFIDENCE_REASON,
+                "conservative",
+                fallback_from_model,
+            ));
+        }
+        return Ok(empty_forecast(
+            future_labels,
+            config.horizon,
+            history_points,
+            LOW_CONFIDENCE_REASON,
+            Some(selected.name.clone()),
+            Some(selected.wape),
+            Some(selected.rmse / display_divisor.max(1.0)),
+            baseline.map(|candidate| candidate.wape),
+            baseline.map(|candidate| candidate.rmse / display_divisor.max(1.0)),
+            serialized,
+            "unavailable",
+        ));
+    }
+
+    let prediction = run_model(
+        &selected.model,
+        history,
+        config,
+        config.horizon,
+        exog_history,
+        future_exog,
+    )?;
+    let (lower, upper) = intervals(&prediction, &selected.residuals);
+    Ok(populated_forecast(
+        future_labels,
+        &prediction,
+        &lower,
+        &upper,
+        history_points,
+        config.horizon,
+        selected.name.as_str(),
+        selected.wape,
+        selected.rmse,
+        baseline.map(|candidate| candidate.wape).unwrap_or(selected.wape),
+        baseline.map(|candidate| candidate.rmse).unwrap_or(selected.rmse),
+        serialized,
+        display_divisor,
+        "",
+        "ready",
+        None,
+    ))
 }
 
 fn ranked_candidates(items: &[Candidate]) -> Vec<Candidate> {
@@ -533,9 +681,16 @@ fn run_model(model: &Model, series: &[f64], config: ForecastConfig, horizon: usi
         Model::SeasonalNaive => seasonal_naive(series, config, horizon),
         Model::Ridge => ridge_predict(series, config, horizon, exog_history, future_exog),
         Model::RecentRidge { window } => {
-            let width = (*window).min(series.len());
-            let sliced_exog = exog_history.map(|rows| rows[rows.len() - width..].to_vec());
-            ridge_predict(&series[series.len() - width..], config, horizon, sliced_exog.as_deref(), future_exog)
+            let (recent_series, recent_exog) = slice_recent_history(series, exog_history, *window);
+            ridge_predict(&recent_series, config, horizon, recent_exog.as_deref(), future_exog)
+        }
+        Model::LogXgBoost { window } => {
+            let (recent_series, recent_exog) = slice_history_for_window(series, exog_history, *window);
+            log_xgboost_predict(&recent_series, config, horizon, recent_exog.as_deref(), future_exog)
+        }
+        Model::TwoStageDuration { window } => {
+            let (recent_series, recent_exog) = slice_history_for_window(series, exog_history, *window);
+            two_stage_duration_predict(&recent_series, config, horizon, recent_exog.as_deref(), future_exog)
         }
         Model::Blend { components } => {
             let total = components.iter().map(|(_, w)| *w).sum::<f64>().max(1e-6);
@@ -571,6 +726,192 @@ fn ridge_predict(series: &[f64], config: ForecastConfig, horizon: usize, exog_hi
     Ok(out)
 }
 
+fn log_xgboost_predict(series: &[f64], config: ForecastConfig, horizon: usize, exog_history: Option<&[Vec<f64>]>, future_exog: Option<&[Vec<f64>]>) -> Result<Vec<f64>> {
+    let transformed = series.iter().map(|value| value.max(0.0).ln_1p()).collect::<Vec<_>>();
+    let (x, y) = supervised_dataset(&transformed, config, exog_history)?;
+    if y.len() < (config.min_history / 2).max(8) {
+        return Err(anyhow!("insufficient xgboost rows"));
+    }
+    let model = fit_xgboost(&x, &y)?;
+    let exog = extend_exog(exog_history, future_exog, horizon);
+    let mut history = transformed;
+    let mut out = Vec::with_capacity(horizon);
+    for _ in 0..horizon {
+        let row = feature_row(&history, history.len(), config, exog.as_deref())?;
+        let row_matrix = DenseMatrix::from_2d_vec(&vec![row])?;
+        let predicted_log = model.predict(&row_matrix)?.into_iter().next().unwrap_or(0.0);
+        let value = predicted_log.max(0.0).exp_m1().max(0.0);
+        out.push(value);
+        history.push(predicted_log.max(0.0));
+    }
+    Ok(out)
+}
+
+fn two_stage_duration_predict(series: &[f64], config: ForecastConfig, horizon: usize, exog_history: Option<&[Vec<f64>]>, future_exog: Option<&[Vec<f64>]>) -> Result<Vec<f64>> {
+    let (rows, target) = supervised_dataset(series, config, exog_history)?;
+    if target.len() < (config.min_history / 2).max(8) {
+        return Err(anyhow!("insufficient two-stage rows"));
+    }
+
+    let threshold = activity_threshold(config);
+    let active_labels = target
+        .iter()
+        .map(|value| u32::from(*value > threshold))
+        .collect::<Vec<_>>();
+    let active_rate = active_labels.iter().map(|value| *value as f64).sum::<f64>() / active_labels.len().max(1) as f64;
+    let active_rows = rows
+        .iter()
+        .zip(target.iter())
+        .filter(|(_, value)| **value > threshold)
+        .map(|(row, value)| (row.clone(), value.ln_1p()))
+        .collect::<Vec<_>>();
+    let inactive_values = target.iter().copied().filter(|value| *value <= threshold).collect::<Vec<_>>();
+    let inactive_level = if inactive_values.is_empty() { 0.0 } else { avg(&inactive_values) };
+
+    let classifier = fit_active_classifier(&rows, &active_labels)?;
+    let intensity_model = fit_active_intensity_model(&active_rows)?;
+    let active_default = if active_rows.is_empty() {
+        0.0
+    } else {
+        avg(&active_rows.iter().map(|(_, value)| value.exp_m1()).collect::<Vec<_>>())
+    };
+
+    let exog = extend_exog(exog_history, future_exog, horizon);
+    let mut history = series.to_vec();
+    let mut out = Vec::with_capacity(horizon);
+    for _ in 0..horizon {
+        let row = feature_row(&history, history.len(), config, exog.as_deref())?;
+        let active_prob = predict_active_probability(&classifier, &row, active_rate)?;
+        let active_intensity = predict_active_intensity(&intensity_model, &row, active_default)?;
+        let value = ((active_prob * active_intensity) + ((1.0 - active_prob) * inactive_level)).max(0.0);
+        out.push(value);
+        history.push(value);
+    }
+    Ok(out)
+}
+
+fn push_candidate(
+    candidates: &mut Vec<Candidate>,
+    name: &str,
+    model: Model,
+    history: &[f64],
+    config: ForecastConfig,
+    exog_history: Option<&[Vec<f64>]>,
+) {
+    if let Ok((wape, rmse, residuals)) = backtest(&model, history, config, exog_history) {
+        if wape.is_finite() && rmse.is_finite() {
+            candidates.push(Candidate {
+                name: name.to_string(),
+                model,
+                wape,
+                rmse,
+                residuals,
+            });
+        }
+    }
+}
+
+fn recent_window(config: ForecastConfig) -> usize {
+    if config.frequency == "weekly" {
+        WEEKLY_RECENT_WINDOW
+    } else {
+        DAILY_RECENT_WINDOW
+    }
+}
+
+fn activity_threshold(config: ForecastConfig) -> f64 {
+    if config.frequency == "daily" { 0.25 } else { 1.0 }
+}
+
+fn slice_history_for_window(
+    series: &[f64],
+    exog_history: Option<&[Vec<f64>]>,
+    window: Option<usize>,
+) -> (Vec<f64>, Option<Vec<Vec<f64>>>) {
+    if let Some(window) = window {
+        slice_recent_history(series, exog_history, window)
+    } else {
+        (series.to_vec(), exog_history.map(|rows| rows.to_vec()))
+    }
+}
+
+fn slice_recent_history(
+    series: &[f64],
+    exog_history: Option<&[Vec<f64>]>,
+    window: usize,
+) -> (Vec<f64>, Option<Vec<Vec<f64>>>) {
+    let width = window.min(series.len());
+    let offset = series.len().saturating_sub(width);
+    (
+        series[offset..].to_vec(),
+        exog_history.map(|rows| rows[offset..].to_vec()),
+    )
+}
+
+fn fit_xgboost(rows: &[Vec<f64>], target: &[f64]) -> Result<SmartcoreXGRegressor> {
+    if rows.is_empty() || target.is_empty() {
+        return Err(anyhow!("empty xgboost input"));
+    }
+    let matrix = DenseMatrix::from_2d_vec(&rows.to_vec())?;
+    let params = XGRegressorParameters::default()
+        .with_n_estimators(80)
+        .with_max_depth(3)
+        .with_learning_rate(0.08)
+        .with_subsample(0.9)
+        .with_lambda(1.5)
+        .with_gamma(0.0)
+        .with_min_child_weight(1);
+    Ok(XGRegressor::fit(&matrix, &target.to_vec(), params)?)
+}
+
+fn fit_active_classifier(rows: &[Vec<f64>], labels: &[u32]) -> Result<Option<BinaryLogisticRegression>> {
+    if rows.is_empty() || labels.is_empty() || labels.iter().all(|value| *value == labels[0]) {
+        return Ok(None);
+    }
+    let matrix = DenseMatrix::from_2d_vec(&rows.to_vec())?;
+    let params = LogisticRegressionParameters::default().with_alpha(0.1);
+    Ok(Some(LogisticRegression::fit(&matrix, &labels.to_vec(), params)?))
+}
+
+fn fit_active_intensity_model(active_rows: &[(Vec<f64>, f64)]) -> Result<Option<SmartcoreXGRegressor>> {
+    if active_rows.len() < 6 {
+        return Ok(None);
+    }
+    let rows = active_rows.iter().map(|(row, _)| row.clone()).collect::<Vec<_>>();
+    let target = active_rows.iter().map(|(_, value)| *value).collect::<Vec<_>>();
+    Ok(Some(fit_xgboost(&rows, &target)?))
+}
+
+fn predict_active_probability(
+    classifier: &Option<BinaryLogisticRegression>,
+    row: &[f64],
+    empirical_prob: f64,
+) -> Result<f64> {
+    let Some(classifier) = classifier else {
+        return Ok(empirical_prob.clamp(0.0, 1.0));
+    };
+    let score = row
+        .iter()
+        .enumerate()
+        .fold(*classifier.intercept().get((0, 0)), |acc, (index, value)| {
+            acc + (*classifier.coefficients().get((0, index)) * *value)
+        });
+    Ok((1.0 / (1.0 + (-score).exp())).clamp(0.0, 1.0))
+}
+
+fn predict_active_intensity(
+    model: &Option<SmartcoreXGRegressor>,
+    row: &[f64],
+    fallback: f64,
+) -> Result<f64> {
+    let Some(model) = model else {
+        return Ok(fallback.max(0.0));
+    };
+    let row_matrix = DenseMatrix::from_2d_vec(&vec![row.to_vec()])?;
+    let predicted = model.predict(&row_matrix)?.into_iter().next().unwrap_or(0.0);
+    Ok(predicted.max(0.0).exp_m1().max(0.0))
+}
+
 fn supervised_dataset(series: &[f64], config: ForecastConfig, exog: Option<&[Vec<f64>]>) -> Result<(Vec<Vec<f64>>, Vec<f64>)> {
     let start = max_lookback(config);
     let mut rows = Vec::new();
@@ -598,7 +939,7 @@ fn feature_row(series: &[f64], index: usize, config: ForecastConfig, exog: Optio
     row.push(avg(&refs));
     row.push(stdev(&refs));
     row.push(*refs.first().unwrap_or(&0.0));
-    let threshold = if config.frequency == "daily" { 0.25 } else { 1.0 };
+    let threshold = activity_threshold(config);
     let active = &series[index.saturating_sub(config.season_length)..index];
     row.push(if active.is_empty() { 0.0 } else { active.iter().filter(|v| **v > threshold).count() as f64 / active.len() as f64 });
     row.extend(calendar(index, config));
@@ -606,9 +947,18 @@ fn feature_row(series: &[f64], index: usize, config: ForecastConfig, exog: Optio
         if !rows.is_empty() {
             let features = rows[0].len();
             for feature_index in 0..features {
-                let column = rows.iter().map(|r| r.get(feature_index).copied().unwrap_or(0.0)).collect::<Vec<_>>();
-                row.push(*column.get(index).unwrap_or(&0.0));
-                row.push(*column.get(index.saturating_sub(1)).unwrap_or(&0.0));
+                let column = rows
+                    .iter()
+                    .map(|r| r.iter().nth(feature_index).copied().unwrap_or(0.0))
+                    .collect::<Vec<_>>();
+                row.push(column.iter().nth(index).copied().unwrap_or(0.0));
+                row.push(
+                    column
+                        .iter()
+                        .nth(index.saturating_sub(1))
+                        .copied()
+                        .unwrap_or(0.0),
+                );
                 for window in config.windows {
                     let slice = &column[index - window..index];
                     row.push(avg(slice));
@@ -706,7 +1056,7 @@ fn combine_exog_from_scalars(scalars: Option<&[f64]>, features: Option<&[Vec<f64
     let mut rows = Vec::with_capacity(len);
     for index in 0..len {
         let mut row = Vec::new();
-        if let Some(values) = scalars { row.push(values.get(index).copied().unwrap_or(0.0)); }
+        if let Some(values) = scalars { row.push(values.iter().nth(index).copied().unwrap_or(0.0)); }
         if let Some(items) = features { if let Some(feature_row) = items.get(index) { row.extend(feature_row.iter().copied()); } }
         rows.push(row);
     }
@@ -843,4 +1193,204 @@ fn quantile(values: &[f64], q: f64) -> f64 {
     let lo = pos.floor() as usize;
     let hi = pos.ceil() as usize;
     if lo == hi { sorted[lo] } else { (sorted[lo] * (1.0 - (pos - lo as f64))) + (sorted[hi] * (pos - lo as f64)) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn daily_labels(len: usize) -> Vec<String> {
+        let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        (0..len)
+            .map(|offset| {
+                (start + Duration::days(offset as i64))
+                    .format("%Y-%m-%d")
+                    .to_string()
+            })
+            .collect()
+    }
+
+    fn weekly_labels(len: usize) -> Vec<String> {
+        (1..=len).map(|week| format!("2025-W{week:02}")).collect()
+    }
+
+    fn option_series(values: &[f64]) -> Vec<Option<f64>> {
+        values.iter().copied().map(Some).collect()
+    }
+
+    #[test]
+    fn recent_window_uses_frequency_specific_size() {
+        assert_eq!(recent_window(DAILY_CONFIG), DAILY_RECENT_WINDOW);
+        assert_eq!(recent_window(WEEKLY_CONFIG), WEEKLY_RECENT_WINDOW);
+
+        let weekly_series = (1..=40)
+            .map(|value| ((value % 6) as f64 * 1.7) + (value as f64 * 0.2))
+            .collect::<Vec<_>>();
+        let expected = ridge_predict(
+            &weekly_series[weekly_series.len() - WEEKLY_RECENT_WINDOW..],
+            WEEKLY_CONFIG,
+            4,
+            None,
+            None,
+        )
+        .unwrap();
+        let actual = run_model(
+            &Model::RecentRidge {
+                window: recent_window(WEEKLY_CONFIG),
+            },
+            &weekly_series,
+            WEEKLY_CONFIG,
+            4,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(actual.len(), expected.len());
+        for (left, right) in actual.iter().zip(expected.iter()) {
+            assert!((left - right).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn seasonal_series_keeps_forecast_available_with_expanded_candidates() {
+        let pattern = [2.0, 2.8, 3.6, 4.1, 4.8, 5.4, 6.2];
+        let values = (0..84)
+            .map(|index| pattern[index % pattern.len()] + ((index / pattern.len()) as f64 * 0.03))
+            .collect::<Vec<_>>();
+        let labels = daily_labels(values.len());
+        let forecast = create_forecast(
+            &labels,
+            &option_series(&values),
+            DAILY_CONFIG,
+            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 3, 25).unwrap(),
+            None,
+            None,
+            None,
+            1.0,
+            "duration",
+        )
+        .unwrap();
+
+        assert_eq!(forecast["status"], "ready");
+        assert_eq!(forecast["available"], true);
+        assert_eq!(forecast["prediction"].as_array().unwrap().len(), DAILY_CONFIG.horizon);
+        assert!(forecast["model_name"].as_str().is_some());
+        assert!(
+            forecast["model_candidates"]
+                .as_array()
+                .unwrap()
+                .len()
+                >= 6
+        );
+    }
+
+    #[test]
+    fn intermittent_duration_series_keeps_nonlinear_candidates_available() {
+        let values = (0..112)
+            .map(|index| match index % 11 {
+                0 => 18.0 + ((index / 11) % 4) as f64 * 4.0,
+                1 => 7.5 + ((index / 11) % 3) as f64 * 1.8,
+                2 if index % 22 == 2 => 4.5,
+                2 => 1.0,
+                _ => 0.0,
+            })
+            .collect::<Vec<_>>();
+        let labels = daily_labels(values.len());
+        let forecast = create_forecast(
+            &labels,
+            &option_series(&values),
+            DAILY_CONFIG,
+            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 4, 22).unwrap(),
+            None,
+            None,
+            None,
+            1.0,
+            "duration",
+        )
+        .unwrap();
+
+        let candidate_names = forecast["model_candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|item| item["model_name"].as_str())
+            .collect::<Vec<_>>();
+        assert!(candidate_names.contains(&"Two-Stage Duration Autoregression"));
+        assert!(candidate_names.contains(&"Log-XGBoost Autoregression"));
+
+        let chosen_names = [
+            forecast["model_name"].as_str().unwrap_or(""),
+            forecast["fallback_from_model"].as_str().unwrap_or(""),
+        ];
+        assert!(chosen_names.iter().any(|name| {
+            *name == "Two-Stage Duration Autoregression"
+                || *name == "Log-XGBoost Autoregression"
+                || *name == "Recent Log-XGBoost Autoregression"
+        }));
+    }
+
+    #[test]
+    fn high_error_forecast_falls_back_to_conservative_baseline() {
+        let values = vec![4.0, 7.5, 5.0, 8.0, 4.2, 7.8, 5.1, 8.2, 4.4, 7.9, 5.3, 8.4];
+        let future_labels = weekly_labels(WEEKLY_CONFIG.horizon);
+        let baseline = Candidate {
+            name: "Seasonal Naive".to_string(),
+            model: Model::SeasonalNaive,
+            wape: 0.52,
+            rmse: 3.4,
+            residuals: vec![vec![0.5; 8]; WEEKLY_CONFIG.horizon],
+        };
+        let selected = Candidate {
+            name: "Log-XGBoost Autoregression".to_string(),
+            model: Model::LogXgBoost { window: None },
+            wape: 0.47,
+            rmse: 2.9,
+            residuals: vec![vec![1.0; 8]; WEEKLY_CONFIG.horizon],
+        };
+        let forecast = finalize_selected_forecast(
+            &future_labels,
+            &values,
+            values.len(),
+            WEEKLY_CONFIG,
+            &selected,
+            Some(&baseline),
+            serialize_candidates(&[baseline.clone(), selected.clone()], &selected.name),
+            1.0,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(forecast["status"], "conservative");
+        assert_eq!(forecast["available"], true);
+        assert_eq!(forecast["model_name"], "Seasonal Naive");
+        assert_eq!(forecast["reason"], LOW_CONFIDENCE_REASON);
+        assert!(forecast["fallback_from_model"].as_str().is_some());
+    }
+
+    #[test]
+    fn insufficient_history_stays_unavailable_without_conservative_fallback() {
+        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 3.5, 2.5, 1.5];
+        let labels = weekly_labels(values.len());
+        let forecast = create_forecast(
+            &labels,
+            &option_series(&values),
+            WEEKLY_CONFIG,
+            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 2, 26).unwrap(),
+            None,
+            None,
+            None,
+            1.0,
+            "efficiency",
+        )
+        .unwrap();
+
+        assert_eq!(forecast["status"], "unavailable");
+        assert_eq!(forecast["available"], false);
+        assert!(forecast["fallback_from_model"].is_null());
+    }
 }

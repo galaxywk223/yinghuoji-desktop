@@ -25,6 +25,7 @@ export function createDefaultForecast() {
     baseline_wape: null,
     baseline_rmse: null,
     model_candidates: [],
+    fallback_from_model: null,
     available: false,
     reason: "",
     status: "unavailable",

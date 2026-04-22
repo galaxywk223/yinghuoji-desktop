@@ -210,6 +210,10 @@ const normalizeForecast = (forecast) => ({
   modelCandidates: Array.isArray(forecast?.model_candidates)
     ? forecast.model_candidates
     : [],
+  fallbackFromModel:
+    typeof forecast?.fallback_from_model === "string"
+      ? forecast.fallback_from_model
+      : "",
   status:
     typeof forecast?.status === "string"
       ? forecast.status
@@ -359,6 +363,12 @@ const forecastWarning = computed(() => {
   if (pending) {
     return "预测正在后台生成，历史趋势已先展示，结果完成后会自动补齐。";
   }
+  const conservative = [duration, efficiency].some(
+    (forecast) => forecast.status === "conservative",
+  );
+  if (conservative) {
+    return "当前结果为低置信保守预测。";
+  }
   const missing = [];
   if (!duration.available) missing.push("时长");
   if (!efficiency.available) missing.push("效率");
@@ -422,19 +432,32 @@ const forecastCards = computed(() => {
 
   return items.map(({ key, title, forecast }) => {
     const pending = forecast.status === "pending";
+    const conservative = forecast.status === "conservative";
     const blocked =
       !pending && !forecast.available && forecast.reason?.includes("误差较高");
-    const tone = pending ? "pending" : forecast.available ? "ready" : blocked ? "blocked" : "idle";
+    const tone = pending
+      ? "pending"
+      : conservative
+        ? "blocked"
+        : forecast.available
+          ? "ready"
+          : blocked
+            ? "blocked"
+            : "idle";
     const status = pending
       ? "后台生成中"
+      : conservative
+        ? "保守预测"
       : forecast.available
         ? "预测已启用"
-        : blocked
-          ? "已因误差拦截"
-          : "暂未启用";
+        : "暂未启用";
     const model = pending ? "等待结果" : forecast.modelName || "无模型";
     const summary = pending
       ? "先展示历史与进行中数据，预测完成后自动补齐。"
+      : conservative
+        ? forecast.fallbackFromModel
+          ? `当前结果为低置信保守预测，已从${forecast.fallbackFromModel}回退到保守基线。`
+          : "当前结果为低置信保守预测。"
       : blocked
         ? forecast.reason || "历史回测误差较高，暂不显示预测。"
         : forecast.reason || "已按当前最优模型输出预测。";
