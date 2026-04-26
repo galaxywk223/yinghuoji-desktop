@@ -1,23 +1,39 @@
 <!-- 空状态组件 -->
 <template>
-  <div class="text-center p-5 empty-state">
-    <div class="empty-icon">📝</div>
-    <h3>还没有任何记录</h3>
-    <p class="text-muted">
-      点击右上角的"添加新记录"按钮，开始你的第一条学习日志吧！
-    </p>
-    <el-button
-      type="primary"
-      size="large"
-      class="mt-3"
-      @click="$emit('add-record')"
-    >
-      <Icon
-        icon="lucide:plus"
-        style="width: 1.3rem; height: 1.3rem; margin-right: 0.25rem"
-      />
-      创建第一条记录
-    </el-button>
+  <div class="records-empty-workbench empty-state">
+    <section class="empty-main">
+      <div class="empty-icon">
+        <Icon icon="lucide:notebook-pen" />
+      </div>
+      <h3>还没有任何记录</h3>
+      <p class="text-muted">
+        创建第一条学习日志后，周视图、分类统计和趋势分析会自动开始积累。
+      </p>
+      <el-button
+        type="primary"
+        size="large"
+        class="mt-3"
+        @click="$emit('add-record')"
+      >
+        <Icon icon="lucide:plus" />
+        创建第一条记录
+      </el-button>
+    </section>
+
+    <aside class="empty-guide">
+      <div>
+        <span class="guide-index">01</span>
+        <p>选择当前学习阶段，记录会自动归入阶段时间线。</p>
+      </div>
+      <div>
+        <span class="guide-index">02</span>
+        <p>填写分类与子分类，后续图表会按分类汇总。</p>
+      </div>
+      <div>
+        <span class="guide-index">03</span>
+        <p>补充笔记，复盘时可以直接回看当时的上下文。</p>
+      </div>
+    </aside>
   </div>
 </template>
 
@@ -30,27 +46,43 @@ defineEmits(["add-record"]);
 
 <style scoped lang="scss">
 .empty-state {
-  padding: 80px 20px;
-  text-align: center;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  min-height: max(420px, calc(100vh - var(--topbar-height) - 220px));
+  padding: 28px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.36fr);
+  gap: 24px;
+  align-items: stretch;
 
   .empty-icon {
-    font-size: 72px;
-    margin-bottom: 20px;
-    line-height: 1;
+    width: 64px;
+    height: 64px;
+    margin-bottom: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-lg);
+    color: var(--brand-primary);
+    background: var(--brand-primary-soft);
+
+    :deep(svg) {
+      width: 30px;
+      height: 30px;
+    }
   }
 
   h3 {
-    color: #374151;
-    margin: 0 0 16px 0;
+    color: var(--text-primary);
+    margin: 0 0 12px;
     font-size: 22px;
-    font-weight: 600;
+    font-weight: 700;
   }
 
   .text-muted {
-    color: #6b7280;
+    max-width: 460px;
+    color: var(--text-secondary);
     margin: 0 0 28px 0;
     font-size: 15px;
     line-height: 1.6;
@@ -63,14 +95,61 @@ defineEmits(["add-record"]);
   .el-button {
     height: 44px;
     padding: 0 28px;
-    font-size: 16px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 700;
 
     :deep(.iconify) {
-      width: 22px;
-      height: 22px;
+      width: 18px;
+      height: 18px;
       margin-right: 8px;
     }
+  }
+}
+
+.empty-main {
+  min-width: 0;
+  padding: 28px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.empty-guide {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty-guide div {
+  flex: 1;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-muted);
+}
+
+.guide-index {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--brand-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.empty-guide p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (max-width: 800px) {
+  .empty-state {
+    grid-template-columns: 1fr;
+    min-height: 0;
   }
 }
 </style>

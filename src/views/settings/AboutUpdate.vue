@@ -3,6 +3,8 @@
     :title="{ icon: 'lucide:info', text: '关于与更新' }"
     subtitle="查看当前安装版本，并在正式安装版中手动检查桌面更新。"
     :custom-class="'settings-subpage'"
+    max-width="full"
+    fill-height
   >
     <div class="about-update-grid">
       <section class="about-card app-meta-card">
@@ -72,6 +74,38 @@
           </p>
         </div>
       </section>
+
+      <section class="about-card runtime-card">
+        <div class="card-head">
+          <div class="card-icon neutral">
+            <Icon icon="lucide:activity" />
+          </div>
+          <div>
+            <p class="eyebrow">运行状态</p>
+            <h3>当前环境说明</h3>
+          </div>
+        </div>
+
+        <div class="runtime-grid">
+          <div class="runtime-item">
+            <span>版本来源</span>
+            <strong>桌面端元数据</strong>
+          </div>
+          <div class="runtime-item">
+            <span>更新检查</span>
+            <strong>{{ appInfo.supportsUpdateCheck ? "可执行" : "仅展示" }}</strong>
+          </div>
+          <div class="runtime-item">
+            <span>当前环境</span>
+            <strong>{{ runtimeLabel }}</strong>
+          </div>
+        </div>
+
+        <p class="meta-note">
+          开发版用于验证界面与功能流程。正式安装版会继续使用当前 updater
+          配置完成在线检查、确认和安装。
+        </p>
+      </section>
     </div>
   </PageContainer>
 </template>
@@ -128,9 +162,12 @@ onMounted(() => {
 
 <style scoped>
 .about-update-grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
+  align-items: stretch;
 }
 
 .about-card {
@@ -146,6 +183,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-height: 300px;
 }
 
 .card-head {
@@ -174,6 +212,11 @@ onMounted(() => {
 .card-icon.warm {
   background: rgba(245, 158, 11, 0.14);
   color: #d97706;
+}
+
+.card-icon.neutral {
+  background: var(--surface-card-muted);
+  color: var(--color-text-secondary);
 }
 
 .eyebrow {
@@ -247,8 +290,43 @@ onMounted(() => {
   gap: 12px;
 }
 
+.runtime-card {
+  grid-column: 1 / -1;
+  min-height: 180px;
+}
+
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.runtime-item {
+  padding: 14px 16px;
+  border: 1px solid var(--stroke-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.48);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.runtime-item span {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.runtime-item strong {
+  color: var(--color-text-heading);
+  font-size: 15px;
+}
+
 @media (max-width: 900px) {
   .about-update-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .runtime-grid {
     grid-template-columns: 1fr;
   }
 }

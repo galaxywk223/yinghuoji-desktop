@@ -3,6 +3,10 @@
   min-height: 100%;
 }
 
+.countdown-page :deep(.page-body) {
+  min-height: 0;
+}
+
 .countdown-add-desktop {
   display: inline-flex;
 }
@@ -19,11 +23,10 @@
 /* 空状态 */
 .empty-state {
   grid-column: 1 / -1;
-  text-align: center;
-  padding: 64px 24px;
+  padding: 28px;
   background: var(--surface-card-muted);
-  border: 2px dashed var(--stroke-soft);
-  border-radius: 24px;
+  border: 1px dashed var(--stroke-soft);
+  border-radius: 16px;
   transition: all 0.2s ease;
 
   &:hover {
@@ -32,8 +35,69 @@
   }
 }
 
+.countdown-empty-workbench {
+  min-height: max(380px, calc(100vh - var(--topbar-height) - 290px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.34fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.countdown-empty-main {
+  min-width: 0;
+  padding: 28px;
+  border-radius: 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-soft);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.countdown-empty-main .pill-btn {
+  margin-top: 10px;
+}
+
+.countdown-empty-guide {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.countdown-empty-guide div {
+  flex: 1;
+  padding: 15px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke-soft);
+  background: var(--surface-card);
+}
+
+.countdown-empty-guide span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--color-text-heading);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.countdown-empty-guide p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.empty-state--minor {
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+}
+
 .empty-state .ll-icon {
-  font-size: 64px;
+  font-size: 52px;
   color: var(--color-text-muted);
   margin-bottom: 16px;
 }
@@ -60,6 +124,11 @@
   .row-cards {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+
+  .countdown-empty-workbench {
+    grid-template-columns: 1fr;
+    min-height: 0;
   }
 
   .countdown-add-desktop {

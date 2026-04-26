@@ -226,10 +226,6 @@
     font-size: 0.9rem;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-    
-    [data-theme='cyberpunk'] & {
-        text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
-    }
   }
 
   .record-mood {
@@ -263,7 +259,6 @@
   
   .cyan-glow {
       color: #00f0ff;
-      [data-theme='cyberpunk'] & { text-shadow: 0 0 15px rgba(0, 240, 255, 0.5); }
   }
 
   .card-label {
@@ -284,7 +279,6 @@
   
   .yellow-glow {
       color: #ffd700;
-      [data-theme='cyberpunk'] & { text-shadow: 0 0 15px rgba(255, 215, 0, 0.5); }
   }
 
   .card-label {
@@ -301,7 +295,6 @@
     
     &.yellow-glow {
       color: #ffd700;
-      [data-theme='cyberpunk'] & { filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.5)); }
     }
   }
 
@@ -312,7 +305,6 @@
     
     &.cyan-glow {
         color: #00f0ff;
-        [data-theme='cyberpunk'] & { text-shadow: 0 0 10px rgba(0, 240, 255, 0.5); }
     }
   }
 
@@ -330,7 +322,6 @@
     
     &.cyan-glow {
         color: #00f0ff;
-        [data-theme='cyberpunk'] & { filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.6)); }
     }
   }
 
@@ -355,7 +346,6 @@
         background: linear-gradient(135deg, #00f0ff 0%, #ffffff 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        [data-theme='cyberpunk'] & { text-shadow: 0 0 10px rgba(0, 240, 255, 0.2); }
     }
   }
 }

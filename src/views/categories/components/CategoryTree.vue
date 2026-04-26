@@ -159,6 +159,9 @@ defineExpose({
   border-radius: 16px;
   border: 1px solid var(--stroke-soft);
   overflow: hidden;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .tree-header {
@@ -211,8 +214,9 @@ defineExpose({
 }
 
 .tree-content {
+  flex: 1;
+  min-height: 0;
   padding: 16px 0;
-  max-height: 600px;
   overflow-y: auto;
 }
 
@@ -270,8 +274,13 @@ defineExpose({
 
 .empty-state {
   text-align: center;
-  padding: 60px 20px;
+  padding: 88px 20px;
   color: var(--color-text-muted);
+  flex: 1;
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .empty-icon {

@@ -1,14 +1,19 @@
 :root {
   --font-family-base:
-    "Inter", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    Inter, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
   --font-family-heading:
-    "Inter", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    Inter, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
 
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
-  --radius-xl: 30px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 999px;
+
+  --border-radius-sm: var(--radius-sm);
+  --border-radius-md: var(--radius-md);
+  --border-radius-lg: var(--radius-lg);
+  --border-radius-xl: var(--radius-xl);
 
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -17,22 +22,23 @@
   --space-8: 2rem;
   --space-12: 3rem;
 
-  --sidebar-width: 268px;
-  --sidebar-collapsed-width: 92px;
-  --topbar-height: 76px;
+  --sidebar-width: 248px;
+  --sidebar-collapsed-width: 76px;
+  --topbar-height: 64px;
   --page-max-width-narrow: 880px;
-  --page-max-width-default: 1180px;
+  --page-max-width-default: 1120px;
   --page-max-width-wide: 1320px;
-  --page-padding-x: clamp(18px, 2.6vw, 32px);
-  --page-padding-y: clamp(18px, 2.4vw, 30px);
+  --page-padding-x: clamp(16px, 2.2vw, 28px);
+  --page-padding-y: clamp(16px, 2vw, 24px);
 
-  --motion-fast: 0.18s;
-  --motion-base: 0.26s;
-  --motion-slow: 0.4s;
-  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-fast: 0.14s;
+  --motion-base: 0.22s;
+  --motion-slow: 0.34s;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @mixin theme-vars(
+  $mode,
   $bg-page,
   $bg-surface,
   $bg-elevated,
@@ -51,14 +57,14 @@
   $warning,
   $error,
   $info,
-  $shadow-color,
-  $glow-color
+  $shadow-color
 ) {
+  --theme-mode: #{$mode};
   --bg-page: #{$bg-page};
   --bg-surface: #{$bg-surface};
   --bg-elevated: #{$bg-elevated};
   --bg-muted: #{$bg-muted};
-  --bg-spotlight: #{$glow-color};
+  --bg-spotlight: transparent;
 
   --text-primary: #{$text-primary};
   --text-secondary: #{$text-secondary};
@@ -78,13 +84,15 @@
   --status-error: #{$error};
   --status-info: #{$info};
 
-  --shadow-1: 0 18px 42px -34px #{$shadow-color};
-  --shadow-2: 0 26px 58px -34px #{$shadow-color};
+  --shadow-1: 0 1px 2px #{$shadow-color};
+  --shadow-2:
+    0 1px 2px #{$shadow-color},
+    0 8px 20px -16px #{$shadow-color};
   --shadow-3:
-    0 34px 80px -44px #{$shadow-color},
-    0 16px 24px -18px rgba(15, 23, 42, 0.18);
-
-  --glass-line: rgba(255, 255, 255, 0.54);
+    0 2px 6px #{$shadow-color},
+    0 16px 32px -22px #{$shadow-color};
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 18%, transparent);
+  --glass-line: rgba(255, 255, 255, 0.48);
 
   --el-color-primary: var(--brand-primary);
   --el-color-success: var(--status-success);
@@ -104,7 +112,6 @@
   --el-border-color-light: var(--border-subtle);
   --el-border-color-lighter: var(--bg-muted);
 
-  /* Legacy aliases kept so old page styles continue to compile safely. */
   --color-primary: var(--brand-primary);
   --color-primary-light: var(--brand-primary-soft);
   --color-primary-dark: var(--brand-primary-strong);
@@ -117,8 +124,8 @@
   --color-bg-page: var(--bg-page);
   --color-bg-sidebar: var(--bg-surface);
   --color-bg-card: var(--bg-surface);
-  --color-bg-hover: rgba(128, 145, 176, 0.12);
-  --color-bg-active: rgba(128, 145, 176, 0.18);
+  --color-bg-hover: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  --color-bg-active: color-mix(in srgb, var(--brand-primary) 10%, transparent);
 
   --color-text-base: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
@@ -134,12 +141,12 @@
   --color-border-hover: var(--brand-primary);
 
   --surface-page: var(--bg-page);
-  --surface-section: color-mix(in srgb, var(--bg-surface) 74%, var(--brand-primary-soft));
+  --surface-section: var(--bg-muted);
   --surface-card: var(--bg-surface);
   --surface-card-muted: var(--bg-muted);
-  --surface-card-strong: color-mix(in srgb, var(--bg-elevated) 84%, var(--brand-primary-soft));
-  --surface-subtle: color-mix(in srgb, var(--bg-surface) 84%, var(--brand-primary-soft));
-  --surface-soft: color-mix(in srgb, var(--bg-muted) 90%, var(--brand-primary-soft));
+  --surface-card-strong: var(--bg-elevated);
+  --surface-subtle: color-mix(in srgb, var(--brand-primary) 8%, var(--bg-surface));
+  --surface-soft: color-mix(in srgb, var(--brand-primary) 6%, var(--bg-muted));
   --stroke-soft: var(--border-subtle);
   --stroke-strong: var(--border-strong);
 
@@ -148,127 +155,252 @@
   --box-shadow-hover: var(--shadow-3);
 }
 
-[data-theme="paper"] {
+[data-theme="paper-light"] {
   @include theme-vars(
-    #f3eee4,
-    #fbf8f2,
+    light,
+    #f7f7f5,
     #ffffff,
-    #f1ece1,
-    #223047,
-    #56657e,
-    #8390a3,
-    #fcfaf6,
-    #ddd4c5,
-    #c2b8a7,
-    #6d84b3,
-    #dde5f2,
-    #526c99,
-    #be8a46,
-    #4d8a69,
-    #b6852f,
-    #c56458,
-    #5d8da8,
-    rgba(43, 54, 76, 0.34),
-    rgba(109, 132, 179, 0.12)
+    #ffffff,
+    #f1f2f0,
+    #181d27,
+    #535862,
+    #717680,
+    #ffffff,
+    #e4e7ec,
+    #d0d5dd,
+    #7f56d9,
+    #f4ebff,
+    #6941c6,
+    #17b26a,
+    #079455,
+    #dc6803,
+    #d92d20,
+    #1570ef,
+    rgba(16, 24, 40, 0.12)
   );
 }
 
-[data-theme="midnight"] {
+[data-theme="paper-dark"] {
   @include theme-vars(
-    #101923,
-    #162231,
-    #1c2b3d,
-    #132031,
-    #edf3fb,
-    #a4b4ca,
-    #74839b,
-    #09111b,
-    #2b3a4d,
-    #40526a,
-    #83a3d8,
-    #233853,
-    #9fb8e4,
-    #d6a66d,
-    #5fb98b,
-    #e0b35c,
-    #d77b75,
-    #72acd2,
-    rgba(0, 0, 0, 0.52),
-    rgba(131, 163, 216, 0.16)
+    dark,
+    #111318,
+    #171a21,
+    #1d212b,
+    #20242e,
+    #f5f5f6,
+    #cecfd2,
+    #94969c,
+    #111318,
+    #30333d,
+    #454854,
+    #b692f6,
+    #2c1c5f,
+    #d6bbfb,
+    #73e2a3,
+    #73e2a3,
+    #fec84b,
+    #f97066,
+    #84caff,
+    rgba(0, 0, 0, 0.44)
   );
 }
 
-[data-theme="forest"] {
+[data-theme="ocean-light"] {
   @include theme-vars(
-    #edf1e7,
-    #fbfcf8,
+    light,
+    #f3f8fb,
     #ffffff,
-    #eef4ec,
-    #20352d,
-    #587265,
-    #88a091,
-    #fbfdf8,
-    #d6e1d7,
-    #b8c9bc,
-    #5c866f,
-    #dbe9df,
-    #456d59,
-    #b88c54,
-    #4a8f65,
-    #ae8c46,
-    #bb655a,
-    #5f8ea1,
-    rgba(31, 49, 42, 0.3),
-    rgba(92, 134, 111, 0.1)
+    #ffffff,
+    #edf4f8,
+    #173342,
+    #496676,
+    #7a909c,
+    #ffffff,
+    #d8e5eb,
+    #c0d3dc,
+    #0e7090,
+    #e0f2fe,
+    #0a5b76,
+    #2e90fa,
+    #099250,
+    #dc6803,
+    #d92d20,
+    #1570ef,
+    rgba(11, 42, 56, 0.12)
   );
 }
 
-[data-theme="ocean"] {
+[data-theme="ocean-dark"] {
   @include theme-vars(
-    #eaf0f2,
-    #f7fbfc,
-    #ffffff,
-    #ebf3f5,
-    #21394a,
-    #587286,
-    #89a1b0,
-    #fbfdfe,
-    #d5e1e6,
-    #b7c8d0,
-    #5d8ba3,
-    #dceaf0,
-    #466f86,
-    #bb8b4e,
-    #4f907a,
-    #b48e46,
-    #bf665d,
-    #588fae,
-    rgba(31, 50, 63, 0.28),
-    rgba(93, 139, 163, 0.1)
+    dark,
+    #07151d,
+    #0c1d28,
+    #122837,
+    #102330,
+    #eff8ff,
+    #b7d4e5,
+    #7fa6b9,
+    #07151d,
+    #254254,
+    #36596b,
+    #67e3f9,
+    #123b4a,
+    #a5f0fc,
+    #53b1fd,
+    #75e0a7,
+    #fec84b,
+    #f97066,
+    #84caff,
+    rgba(0, 0, 0, 0.46)
   );
 }
 
-[data-theme="amber"] {
+[data-theme="forest-light"] {
   @include theme-vars(
-    #f4ebdc,
-    #fbf6ee,
+    light,
+    #f5f8f4,
     #ffffff,
-    #f2e7d5,
-    #392b20,
-    #7a624f,
-    #aa8f76,
-    #fffaf3,
-    #e0d1bd,
-    #c9b79e,
-    #a97a46,
-    #f0dfc8,
-    #8f6334,
-    #8d8fb5,
-    #4c8764,
-    #b38335,
-    #c36354,
-    #5e84a0,
-    rgba(65, 42, 23, 0.28),
-    rgba(169, 122, 70, 0.12)
+    #ffffff,
+    #edf3ea,
+    #19352a,
+    #4c665a,
+    #7a9186,
+    #ffffff,
+    #dbe7dc,
+    #c1d2c5,
+    #157f3c,
+    #dcfae6,
+    #05603a,
+    #669f2a,
+    #099250,
+    #dc6803,
+    #d92d20,
+    #1570ef,
+    rgba(20, 53, 42, 0.12)
+  );
+}
+
+[data-theme="forest-dark"] {
+  @include theme-vars(
+    dark,
+    #0d1713,
+    #121f1a,
+    #182922,
+    #16241f,
+    #effaf3,
+    #bfd8ca,
+    #88a897,
+    #0d1713,
+    #2a4236,
+    #3c5a4b,
+    #75e0a7,
+    #143c2a,
+    #a6f4c5,
+    #a6ef67,
+    #75e0a7,
+    #fec84b,
+    #f97066,
+    #84caff,
+    rgba(0, 0, 0, 0.46)
+  );
+}
+
+[data-theme="amber-light"] {
+  @include theme-vars(
+    light,
+    #fbf7f0,
+    #ffffff,
+    #ffffff,
+    #f4ede3,
+    #33261c,
+    #6f5f4c,
+    #9a846c,
+    #ffffff,
+    #eadfce,
+    #d7c6ad,
+    #b54708,
+    #fef0c7,
+    #93370d,
+    #d444f1,
+    #099250,
+    #dc6803,
+    #d92d20,
+    #1570ef,
+    rgba(55, 36, 18, 0.12)
+  );
+}
+
+[data-theme="amber-dark"] {
+  @include theme-vars(
+    dark,
+    #19130d,
+    #221a12,
+    #2d2318,
+    #281f16,
+    #fff8ed,
+    #dcc6aa,
+    #a98f70,
+    #19130d,
+    #473725,
+    #60492f,
+    #fdb022,
+    #4a2e0a,
+    #fedf89,
+    #f670c7,
+    #75e0a7,
+    #fec84b,
+    #f97066,
+    #84caff,
+    rgba(0, 0, 0, 0.48)
+  );
+}
+
+[data-theme="midnight-light"] {
+  @include theme-vars(
+    light,
+    #f5f7fb,
+    #ffffff,
+    #ffffff,
+    #eef2f8,
+    #111827,
+    #4b5565,
+    #7c8595,
+    #ffffff,
+    #dfe4ee,
+    #cbd3df,
+    #344054,
+    #eef2ff,
+    #1f2937,
+    #6172f3,
+    #099250,
+    #dc6803,
+    #d92d20,
+    #1570ef,
+    rgba(17, 24, 39, 0.12)
+  );
+}
+
+[data-theme="midnight-dark"] {
+  @include theme-vars(
+    dark,
+    #0b1020,
+    #111827,
+    #182230,
+    #151c2c,
+    #f8fafc,
+    #cbd5e1,
+    #94a3b8,
+    #0b1020,
+    #293548,
+    #3b4a60,
+    #8da4ef,
+    #202d53,
+    #b7c6f8,
+    #53b1fd,
+    #75e0a7,
+    #fec84b,
+    #f97066,
+    #84caff,
+    rgba(0, 0, 0, 0.5)
   );
 }

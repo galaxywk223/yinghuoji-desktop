@@ -4,7 +4,8 @@
       :title="{ icon: 'lucide:timer-reset', text: isTimerRunning ? '专注中' : '专注计时' }"
       subtitle="保持专注，记录每一步的累积"
       header-variant="hero"
-      max-width="wide"
+      max-width="full"
+      fill-height
     >
       <div class="focus-layout">
         <div class="focus-layout__timer">
@@ -29,6 +30,14 @@
         </div>
 
         <div class="focus-layout__details">
+          <div class="focus-panel-head">
+            <div>
+              <p class="panel-eyebrow">本次记录</p>
+              <h3>{{ isTimerRunning || isPaused ? "专注信息" : "开始前确认内容" }}</h3>
+            </div>
+            <span class="stage-chip">{{ activeStageLabel }}</span>
+          </div>
+
           <!-- 表单区域 -->
           <FocusForm
             v-if="!isTimerRunning && !isPaused"
@@ -46,6 +55,24 @@
             :categories="categories"
             :subcategories="allSubcategories"
           />
+
+          <div class="focus-support-grid">
+            <section class="support-card">
+              <span class="support-label">阶段</span>
+              <strong>{{ activeStageLabel }}</strong>
+              <p>本次记录会归入当前激活阶段。</p>
+            </section>
+            <section class="support-card">
+              <span class="support-label">分类</span>
+              <strong>{{ categories.length }}</strong>
+              <p>个主分类可用于整理学习方向。</p>
+            </section>
+            <section class="support-card">
+              <span class="support-label">子分类</span>
+              <strong>{{ allSubcategories.length }}</strong>
+              <p>选择子分类后，统计图表会自动归类。</p>
+            </section>
+          </div>
         </div>
       </div>
       <!-- 结束专注弹窗 -->
@@ -239,6 +266,10 @@ const availableSubcategories = computed(() => {
     (sub) => sub.category_id === focusForm.value.categoryId,
   );
 });
+
+const activeStageLabel = computed(
+  () => stageStore.activeStage?.name || "未选择阶段",
+);
 
 // 加载数据
 const loadData = async () => {
@@ -485,11 +516,12 @@ onActivated(() => {
 .focus-layout {
   position: relative;
   z-index: 1;
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(420px, 1fr);
-  gap: clamp(1.25rem, 2.2vw, 2rem);
-  align-items: center;
-  justify-content: center;
+  grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
   margin-top: 8px;
 
   &__timer {
@@ -497,27 +529,136 @@ onActivated(() => {
     flex-direction: column;
     gap: 1rem;
     align-items: center;
-    padding: clamp(20px, 3vw, 32px);
-    border-radius: var(--radius-xl);
+    min-height: max(520px, calc(100vh - var(--topbar-height) - 178px));
+    padding: 24px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border-subtle);
-    background:
-      radial-gradient(circle at top, color-mix(in srgb, var(--brand-primary) 10%, transparent) 0%, transparent 32%),
-      linear-gradient(180deg, color-mix(in srgb, var(--bg-elevated) 94%, white) 0%, var(--bg-surface) 100%);
-    box-shadow: var(--shadow-2);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-1);
+    justify-content: center;
   }
 
   &__details {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 14px;
     width: 100%;
-    padding: clamp(20px, 3vw, 32px);
-    border-radius: var(--radius-xl);
+    min-height: max(520px, calc(100vh - var(--topbar-height) - 178px));
+    padding: 16px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border-subtle);
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--bg-elevated) 94%, white) 0%, var(--bg-surface) 100%);
-    box-shadow: var(--shadow-2);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-1);
   }
+}
+
+.focus-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 4px 8px;
+}
+
+.panel-eyebrow {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.focus-panel-head h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.08rem;
+  line-height: 1.25;
+}
+
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  max-width: 240px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.focus-support-grid {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.support-card {
+  min-width: 0;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-muted);
+}
+
+.support-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.support-card strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 1.18rem;
+  line-height: 1.2;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.support-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.focus-layout :deep(.focus-form .el-form) {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.focus-layout :deep(.focus-controls) {
+  margin-top: 0.5rem;
+}
+
+.focus-layout :deep(.control-btn) {
+  height: 44px;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+}
+
+.focus-layout :deep(.button-stack) {
+  max-width: 100%;
+  gap: 0.75rem;
+}
+
+.focus-layout :deep(.timer-display) {
+  min-height: 330px;
 }
 
 /* iOS Dialog Styles */
@@ -666,6 +807,15 @@ onActivated(() => {
 
 @media (max-width: 768px) {
   .focus-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-layout__timer,
+  .focus-layout__details {
+    min-height: 0;
+  }
+
+  .focus-support-grid {
     grid-template-columns: 1fr;
   }
 }

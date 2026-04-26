@@ -2,8 +2,7 @@
 .app-card {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-elevated) 92%, white) 0%, var(--bg-surface) 100%);
+  background: var(--bg-surface);
   box-shadow: var(--shadow-1);
   transition:
     transform var(--motion-fast) var(--motion-ease),
@@ -14,8 +13,8 @@
 .card:hover,
 .app-card:hover {
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-2);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-1);
+  transform: none;
 }
 
 .card-header,
@@ -24,12 +23,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 18px 20px 0;
+  padding: 14px 16px 0;
 }
 
 .card-body,
 .app-card__body {
-  padding: 20px;
+  padding: 16px;
 }
 
 .card-title,
@@ -44,26 +43,26 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 12px;
-  border-radius: var(--radius-pill);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-muted);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 600;
 }
 
 .app-fab {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border: none;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-strong) 100%);
+  background: var(--brand-primary);
   color: var(--text-inverse);
-  box-shadow: var(--shadow-3);
+  box-shadow: var(--shadow-2);
   cursor: pointer;
   transition:
     transform var(--motion-fast) var(--motion-ease),
@@ -72,7 +71,7 @@
 }
 
 .app-fab:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   filter: brightness(1.02);
 }
 

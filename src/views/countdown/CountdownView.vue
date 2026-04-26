@@ -4,6 +4,7 @@
     :subtitle="relativeTime"
     :custom-class="'countdown-page'"
     max-width="wide"
+    fill-height
   >
     <template #actions>
       <button class="pill-btn primary countdown-add-desktop" type="button" @click="openCreate">
@@ -16,7 +17,7 @@
       <el-collapse
         v-model="activePanels"
         class="countdown-collapse"
-        accordion="{false}"
+        :accordion="false"
       >
         <el-collapse-item name="active">
           <template #title>
@@ -35,10 +36,31 @@
                 @delete="confirmDelete(ev)"
               />
             </template>
-            <div v-else class="empty-state">
-              <i class="ll-icon flag" />
-              <h3>当前没有进行中的目标</h3>
-              <p class="text-muted">点击右下角 “+” 创建你的第一个倒计时吧！</p>
+            <div v-else class="empty-state countdown-empty-workbench">
+              <section class="countdown-empty-main">
+                <i class="ll-icon flag" />
+                <h3>当前没有进行中的目标</h3>
+                <p class="text-muted">
+                  创建目标后，这里会按剩余时间展示近期节点和长期计划。
+                </p>
+                <button class="pill-btn primary" type="button" @click="openCreate">
+                  新建第一个目标
+                </button>
+              </section>
+              <aside class="countdown-empty-guide">
+                <div>
+                  <span>目标名称</span>
+                  <p>写成清晰结果，例如“完成数学一轮复习”。</p>
+                </div>
+                <div>
+                  <span>目标日期</span>
+                  <p>设置日期和时间后，系统会自动计算剩余天数。</p>
+                </div>
+                <div>
+                  <span>过期归档</span>
+                  <p>超过目标时间后会进入已过期区域，仍可编辑或删除。</p>
+                </div>
+              </aside>
             </div>
           </div>
         </el-collapse-item>
@@ -61,7 +83,9 @@
                 @delete="confirmDelete(ev)"
               />
             </template>
-            <p v-else class="text-center text-muted">还没有已完成的目标。</p>
+            <div v-else class="empty-state empty-state--minor">
+              <p class="text-center text-muted">还没有已完成的目标。</p>
+            </div>
           </div>
         </el-collapse-item>
       </el-collapse>

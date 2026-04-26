@@ -3,67 +3,91 @@
     :title="{ icon: 'lucide:message-square-quote', text: '格言管理' }"
     subtitle="写下一句激励你的话语，启发每一天。"
     :custom-class="'settings-subpage'"
+    max-width="full"
+    fill-height
   >
-    <div class="motto-container-flat">
-      <!-- Header / Add Area -->
-      <div class="motto-header">
-        <div class="header-left">
-          <h4>格言列表</h4>
-        </div>
-        <div class="add-wrapper">
-          <input
-            v-model="form.content"
-            type="text"
-            maxlength="500"
-            placeholder="在此输入新的格言..."
-            @keyup.enter="submitAdd"
-          />
-          <button
-            class="pill-btn primary"
-            type="button"
-            style="padding: 8px 16px; min-width: auto; font-size: 14px"
-            :disabled="adding || !form.content.trim()"
-            @click="submitAdd"
-          >
-            {{ adding ? "..." : "添加" }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Motto List -->
-      <div v-if="itemsSorted.length" class="motto-list">
-        <div class="list-header">
-          <span class="col-content">内容</span>
-          <span class="col-actions">操作</span>
-        </div>
-
-        <div v-for="m in itemsSorted" :key="m.id" class="motto-row">
-          <div class="col-content">
-            <span class="quote-mark">❝</span>
-            <span class="motto-text">{{ m.content }}</span>
+    <div class="motto-workbench">
+      <div class="motto-container-flat">
+        <!-- Header / Add Area -->
+        <div class="motto-header">
+          <div class="header-left">
+            <h4>格言列表</h4>
           </div>
-          <div class="col-actions">
-            <div class="action-group">
-              <button class="action-btn" title="编辑" @click="openEdit(m)">
-                ✏️
-              </button>
-              <button
-                class="action-btn danger"
-                title="删除"
-                @click="confirmDelete(m.id)"
-              >
-                🗑️
-              </button>
+          <div class="add-wrapper">
+            <input
+              v-model="form.content"
+              type="text"
+              maxlength="500"
+              placeholder="在此输入新的格言..."
+              @keyup.enter="submitAdd"
+            />
+            <button
+              class="pill-btn primary"
+              type="button"
+              style="padding: 8px 16px; min-width: auto; font-size: 14px"
+              :disabled="adding || !form.content.trim()"
+              @click="submitAdd"
+            >
+              {{ adding ? "..." : "添加" }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Motto List -->
+        <div v-if="itemsSorted.length" class="motto-list">
+          <div class="list-header">
+            <span class="col-content">内容</span>
+            <span class="col-actions">操作</span>
+          </div>
+
+          <div v-for="m in itemsSorted" :key="m.id" class="motto-row">
+            <div class="col-content">
+              <span class="quote-mark">❝</span>
+              <span class="motto-text">{{ m.content }}</span>
+            </div>
+            <div class="col-actions">
+              <div class="action-group">
+                <button class="action-btn" title="编辑" @click="openEdit(m)">
+                  ✏️
+                </button>
+                <button
+                  class="action-btn danger"
+                  title="删除"
+                  @click="confirmDelete(m.id)"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
           </div>
         </div>
+
+        <div v-else class="empty-state motto-empty">
+          <div class="empty-icon">🪶</div>
+          <p>记录第一句人生格言</p>
+          <p class="empty-sub">在上方输入框里写下你的灵感</p>
+        </div>
       </div>
 
-      <div v-else class="empty-state">
-        <div class="empty-icon">🪶</div>
-        <p>记录第一句人生格言</p>
-        <p class="empty-sub">在上方输入框里写下你的灵感</p>
-      </div>
+      <aside class="motto-inspector">
+        <section class="inspector-card">
+          <p class="inspector-eyebrow">收录数量</p>
+          <strong>{{ mottoCount }}</strong>
+          <span>条格言</span>
+        </section>
+        <section class="inspector-card">
+          <p class="inspector-eyebrow">最近内容</p>
+          <p class="latest-motto">{{ latestMottoText }}</p>
+        </section>
+        <section class="inspector-card inspector-card--muted">
+          <p class="inspector-eyebrow">使用建议</p>
+          <ul>
+            <li>保持句子简短，适合在仪表盘快速阅读。</li>
+            <li>每条格言应只表达一个明确行动或态度。</li>
+            <li>长期无效的内容可直接编辑或删除。</li>
+          </ul>
+        </section>
+      </aside>
     </div>
 
     <!-- Edit Dialog -->
@@ -120,6 +144,12 @@ const editVisible = ref(false);
 
 const itemsSorted = computed(() =>
   (mottoStore.items || []).slice().sort((a, b) => (b.id || 0) - (a.id || 0)),
+);
+
+const mottoCount = computed(() => itemsSorted.value.length);
+
+const latestMottoText = computed(() =>
+  itemsSorted.value[0]?.content || "暂无格言，添加后会在这里显示最近内容。",
 );
 
 async function submitAdd() {
@@ -194,10 +224,23 @@ onMounted(() => {
 <style scoped>
 .motto-container-flat {
   width: 100%;
+  min-width: 0;
+  min-height: 100%;
   background: var(--surface-card);
   border-radius: 16px;
   border: 1px solid var(--stroke-soft);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.motto-workbench {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.32fr);
+  gap: 18px;
+  align-items: stretch;
 }
 
 .motto-header {
@@ -275,6 +318,7 @@ onMounted(() => {
 .motto-list {
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .list-header {
@@ -372,6 +416,10 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .motto-workbench {
+    grid-template-columns: 1fr;
+  }
+
   .action-group {
     opacity: 1;
   }
@@ -393,12 +441,15 @@ onMounted(() => {
 
 .empty-state {
   text-align: center;
-  padding: 60px 0;
+  padding: 88px 20px;
   color: var(--color-text-muted);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  justify-content: center;
+  flex: 1;
+  min-height: 340px;
 }
 
 .empty-icon {
@@ -409,6 +460,61 @@ onMounted(() => {
 .empty-sub {
   font-size: 13px;
   color: var(--color-text-muted);
+}
+
+.motto-inspector {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inspector-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke-soft);
+  background: var(--surface-card);
+}
+
+.inspector-card strong {
+  display: block;
+  color: var(--color-text-heading);
+  font-size: 36px;
+  line-height: 1;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-card span,
+.latest-motto {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.inspector-eyebrow {
+  margin: 0 0 10px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspector-card--muted {
+  flex: 1;
+  background: var(--surface-card-muted);
+}
+
+.inspector-card ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 /* Dialog Styles */

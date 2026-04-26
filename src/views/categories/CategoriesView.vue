@@ -3,6 +3,8 @@
     :title="{ icon: 'lucide:folder-tree', text: '分类管理' }"
     subtitle="维护学习分类与子分类层级结构"
     :custom-class="'settings-subpage'"
+    max-width="full"
+    fill-height
   >
     <template #actions>
       <div class="actions">
@@ -19,7 +21,7 @@
       </div>
     </template>
 
-    <div v-loading="store.loading" class="content-section">
+    <div v-loading="store.loading" class="content-section category-workbench">
       <CategoryTree
         ref="treeRef"
         :tree-data="treeData"
@@ -32,6 +34,37 @@
         @merge="openMergeDialog"
         @delete="deleteCategory"
       />
+
+      <aside class="category-inspector">
+        <section class="category-inspector-card">
+          <p class="inspector-eyebrow">分类总览</p>
+          <div class="category-metrics">
+            <div>
+              <strong>{{ categoryCount }}</strong>
+              <span>主分类</span>
+            </div>
+            <div>
+              <strong>{{ subcategoryCount }}</strong>
+              <span>子分类</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="category-inspector-card">
+          <p class="inspector-eyebrow">当前选择</p>
+          <h4>{{ selectedNodeTitle }}</h4>
+          <p>{{ selectedNodeDescription }}</p>
+        </section>
+
+        <section class="category-inspector-card category-inspector-card--muted">
+          <p class="inspector-eyebrow">整理建议</p>
+          <ul>
+            <li>主分类用于划分长期学习领域。</li>
+            <li>子分类用于承接具体记录和统计。</li>
+            <li>重复子分类可使用合并功能整理。</li>
+          </ul>
+        </section>
+      </aside>
     </div>
 
     <!-- 分类表单弹窗 -->
@@ -119,6 +152,29 @@ const mergeSubmitting = ref(false);
 // 计算属性
 const treeData = computed(() => {
   return store.categoryTree || [];
+});
+
+const categoryCount = computed(() => treeData.value.length);
+
+const subcategoryCount = computed(() =>
+  treeData.value.reduce((total, category) => {
+    const children = category.children || category.subcategories || [];
+    return total + children.length;
+  }, 0),
+);
+
+const selectedNodeTitle = computed(() => selectedNode.value?.name || "未选择分类");
+
+const selectedNodeDescription = computed(() => {
+  if (!selectedNode.value) {
+    return "点击左侧分类树中的节点后，这里会显示可执行操作。";
+  }
+
+  if (selectedNode.value.category_id) {
+    return "当前节点是子分类，可编辑、删除或合并到其他子分类。";
+  }
+
+  return "当前节点是主分类，可添加子分类、编辑或删除。";
 });
 
 const mergeTargetOptions = computed(() => {
@@ -339,6 +395,98 @@ onMounted(async () => {
 .content-section {
   margin-top: 24px;
 }
+
+.category-workbench {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.32fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.category-workbench :deep(.tree-container-flat) {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.category-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+}
+
+.category-inspector-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke-soft);
+  background: var(--surface-card);
+}
+
+.category-inspector-card h4 {
+  margin: 0 0 8px;
+  color: var(--color-text-heading);
+  font-size: 18px;
+}
+
+.category-inspector-card p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.category-inspector-card--muted {
+  flex: 1;
+  background: var(--surface-card-muted);
+}
+
+.inspector-eyebrow {
+  margin: 0 0 10px !important;
+  color: var(--color-text-muted) !important;
+  font-size: 11px !important;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.category-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.category-metrics div {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface-card-muted);
+  border: 1px solid var(--stroke-soft);
+}
+
+.category-metrics strong {
+  display: block;
+  color: var(--color-text-heading);
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.category-metrics span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.category-inspector-card ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
 .merge-body {
   display: flex;
   flex-direction: column;
@@ -362,6 +510,10 @@ onMounted(async () => {
 @media (max-width: 768px) {
   .content-section {
     margin-top: 16px;
+  }
+
+  .category-workbench {
+    grid-template-columns: 1fr;
   }
 }
 </style>

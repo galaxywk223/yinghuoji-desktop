@@ -1,0 +1,444 @@
+:root {
+  --transition-speed: var(--motion-fast);
+}
+
+.page-wrapper,
+.main-shell,
+.main-content {
+  background: var(--bg-page);
+}
+
+.settings-nav,
+.settings-content,
+.sidebar-filter,
+.timeline-wrapper,
+.data-card,
+.stage-container,
+.motto-container-flat,
+.about-card,
+.countdown-card,
+.expired-card,
+.day-card,
+.manager-card,
+.category-card,
+.focus-layout__timer,
+.focus-layout__details,
+.focus-form .el-form,
+.focus-info,
+.charts-main-surface,
+.toolbar-container,
+.weeks-accordion .el-collapse-item {
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--bg-surface) !important;
+  box-shadow: var(--shadow-1) !important;
+}
+
+.settings-nav,
+.sidebar-filter {
+  padding: 10px !important;
+}
+
+.settings-content,
+.timeline-wrapper,
+.charts-main-surface {
+  padding: 16px !important;
+}
+
+.settings-layout-container,
+.settings-subpage,
+.data-workbench,
+.motto-workbench,
+.stage-workbench,
+.category-workbench {
+  min-height: 0;
+}
+
+.data-workbench,
+.motto-workbench,
+.stage-workbench,
+.category-workbench {
+  min-height: max(520px, calc(100vh - var(--topbar-height) - 230px));
+}
+
+.settings-nav-item,
+.filter-item,
+.nav-link,
+.panel-tag,
+.week-chip,
+.metric-pill,
+.badge,
+.badge-current,
+.category-tag,
+.live-timer,
+.page-link {
+  border-radius: var(--radius-md) !important;
+}
+
+.settings-nav-item.router-link-exact-active,
+.filter-item.active,
+.nav-link.router-link-exact-active {
+  background: var(--brand-primary-soft) !important;
+  color: var(--brand-primary-strong) !important;
+  box-shadow: none !important;
+}
+
+.countdown-card:hover,
+.expired-card:hover,
+.day-card:hover,
+.category-card:hover,
+.weeks-accordion .el-collapse-item:hover,
+.app-card:hover,
+.card:hover {
+  transform: none !important;
+  box-shadow: var(--shadow-1) !important;
+}
+
+.focus-layout__timer,
+.focus-layout__details {
+  padding: 18px !important;
+}
+
+.focus-form .el-form {
+  padding: 18px !important;
+  gap: 14px !important;
+}
+
+.focus-info {
+  margin-top: 0 !important;
+  padding: 16px !important;
+}
+
+.focus-controls {
+  margin-top: 12px !important;
+}
+
+.focus-controls .control-btn {
+  height: 42px !important;
+  border-radius: var(--radius-md) !important;
+  font-size: 0.95rem !important;
+  box-shadow: none !important;
+}
+
+.focus-controls .primary-btn,
+.focus-controls .resume-btn,
+.focus-controls .pause-btn,
+.focus-controls .stop-btn,
+.pill-btn.primary,
+.fab-add,
+.milestone-fab .fab-primary,
+.add-btn {
+  background: var(--brand-primary) !important;
+  color: var(--text-inverse) !important;
+  box-shadow: none !important;
+}
+
+.focus-controls .pause-btn {
+  background: var(--status-warning) !important;
+}
+
+.focus-controls .stop-btn,
+.pill-btn.danger.solid {
+  background: var(--status-error) !important;
+}
+
+.floating-actions,
+.milestone-fab {
+  gap: 8px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.fab,
+.fab-add,
+.fab-sort,
+.fab-shuffle,
+.milestone-fab .fab,
+.app-fab,
+.action-btn,
+.ghost-btn {
+  border-radius: var(--radius-md) !important;
+}
+
+.fab-add,
+.milestone-fab .fab-primary {
+  width: 44px !important;
+  height: 44px !important;
+}
+
+.fab-sort,
+.fab-shuffle,
+.milestone-fab .fab-secondary {
+  width: 36px !important;
+  height: 36px !important;
+  border: 1px solid var(--border-subtle) !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+}
+
+.countdown-card,
+.expired-card {
+  min-height: 190px !important;
+}
+
+.countdown-card .card-header,
+.countdown-card .card-body,
+.countdown-card .card-footer {
+  background: transparent !important;
+}
+
+.progress-ring-text .days-remaining,
+.status-normal .progress-ring-text .days-remaining,
+.status-normal .card-header {
+  color: var(--brand-primary) !important;
+}
+
+.row-cards {
+  gap: 12px !important;
+}
+
+.empty-state,
+.empty-box,
+.panel-empty,
+.app-empty {
+  border: 1px dashed var(--border-strong) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--bg-muted) !important;
+  box-shadow: none !important;
+}
+
+.records-empty-workbench,
+.countdown-empty-workbench,
+.motto-empty,
+.stage-empty,
+.tree-container-flat .empty-state {
+  min-height: max(340px, calc(100vh - var(--topbar-height) - 320px));
+}
+
+.records-empty-workbench .empty-icon,
+.countdown-empty-workbench .empty-icon,
+.motto-empty .empty-icon,
+.stage-empty .empty-icon,
+.tree-container-flat .empty-icon {
+  animation: none !important;
+}
+
+.charts-sidebar .filter-list {
+  gap: 8px !important;
+}
+
+.charts-sidebar .filter-item {
+  min-height: 58px !important;
+  padding: 10px 12px !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--bg-surface) !important;
+  box-shadow: none !important;
+}
+
+.charts-sidebar .filter-item.active {
+  border-color: color-mix(in srgb, var(--brand-primary) 22%, var(--border-subtle)) !important;
+  background: var(--brand-primary-soft) !important;
+}
+
+.charts-panel-head__copy h2 {
+  letter-spacing: 0 !important;
+}
+
+.toolbar-container {
+  padding: 10px !important;
+}
+
+.segmented,
+.app-segmented {
+  border-radius: var(--radius-md) !important;
+}
+
+.seg-btn,
+.app-segmented__btn {
+  border-radius: var(--radius-sm) !important;
+}
+
+.rank-bar span,
+.bar-fill,
+.daily-progress-container .el-progress-bar__inner,
+.daily-progress-panel .el-progress-bar__inner {
+  background: var(--brand-primary) !important;
+}
+
+.week-title,
+.total-duration-text {
+  background: none !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.weeks-accordion .el-collapse-item {
+  padding: 16px !important;
+  margin-bottom: 12px !important;
+}
+
+.week-title-block .week-title {
+  font-size: 1.1rem !important;
+  letter-spacing: 0 !important;
+}
+
+.week-eff {
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-muted) !important;
+  border: 1px solid var(--border-subtle) !important;
+}
+
+.day-card .el-card__header {
+  background: var(--bg-muted) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+.date-badge,
+.day-log-count,
+.daily-progress-panel,
+.metric-pill {
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--border-subtle) !important;
+  background: var(--bg-surface) !important;
+}
+
+.log-table .el-table__header th {
+  background: var(--bg-muted) !important;
+}
+
+.log-table .el-button--link {
+  min-width: 32px !important;
+  min-height: 32px !important;
+  padding: 6px !important;
+  border-radius: var(--radius-sm) !important;
+  background: transparent !important;
+}
+
+.category-color-0,
+.category-color-1,
+.category-color-2,
+.category-color-3,
+.category-color-4,
+.category-color-5 {
+  background: var(--brand-primary-soft) !important;
+  color: var(--brand-primary-strong) !important;
+}
+
+.ios-list-item {
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-surface) !important;
+  box-shadow: none !important;
+}
+
+.ios-list-item::after {
+  display: none !important;
+}
+
+.ios-list-item::before {
+  background: var(--record-accent, var(--brand-primary)) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.ios-list-item:hover {
+  transform: none !important;
+  filter: none !important;
+}
+
+.col-category .category-path,
+.col-note .notes-toggle,
+.expanded-notes {
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-muted) !important;
+  box-shadow: none !important;
+}
+
+.layout-grid,
+.settings-main-content {
+  gap: 14px !important;
+}
+
+.timeline::before {
+  background: var(--border-subtle) !important;
+}
+
+.timeline-icon,
+.category-icon,
+.card-icon,
+.icon-wrapper {
+  border-radius: var(--radius-md) !important;
+  background: var(--brand-primary-soft) !important;
+  color: var(--brand-primary) !important;
+  box-shadow: none !important;
+}
+
+.manager-card,
+.category-card,
+.meta-item,
+.add-row,
+.file-info,
+.danger-row {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+.manager-header h2,
+.manager-header p,
+.category-meta .name,
+.category-meta .count,
+.empty-title,
+.empty-sub,
+.add-row input {
+  color: inherit !important;
+}
+
+.data-card,
+.about-card {
+  padding: 16px !important;
+}
+
+.data-support-panel,
+.motto-inspector .inspector-card,
+.stage-inspector-card,
+.category-inspector-card,
+.runtime-item,
+.empty-guide div,
+.countdown-empty-guide div {
+  border-color: var(--border-subtle) !important;
+  background: var(--bg-surface) !important;
+  box-shadow: none !important;
+}
+
+.inspector-card--muted,
+.stage-inspector-card--muted,
+.category-inspector-card--muted,
+.empty-main,
+.countdown-empty-main {
+  background: var(--bg-muted) !important;
+}
+
+.card-icon {
+  width: 40px !important;
+  height: 40px !important;
+  font-size: 20px !important;
+}
+
+.danger-row {
+  border-color: color-mix(in srgb, var(--status-error) 28%, var(--border-subtle)) !important;
+  background: color-mix(in srgb, var(--status-error) 8%, var(--bg-surface)) !important;
+}
+
+@media (max-width: 900px) {
+  .data-workbench,
+  .motto-workbench,
+  .stage-workbench,
+  .category-workbench,
+  .records-empty-workbench,
+  .countdown-empty-workbench,
+  .motto-empty,
+  .stage-empty,
+  .tree-container-flat .empty-state {
+    min-height: 0 !important;
+  }
+}

@@ -1,9 +1,9 @@
 .el-button {
   --el-button-font-weight: 600;
   --el-border-radius-base: var(--radius-md);
-  --el-component-size-large: 44px;
-  --el-component-size-default: 40px;
-  --el-component-size-small: 34px;
+  --el-component-size-large: 40px;
+  --el-component-size-default: 36px;
+  --el-component-size-small: 30px;
   transition:
     transform var(--motion-fast) var(--motion-ease),
     box-shadow var(--motion-fast) var(--motion-ease),
@@ -12,11 +12,11 @@
 }
 
 .el-button:not(.is-disabled):hover {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .el-button--primary {
-  box-shadow: var(--shadow-1);
+  box-shadow: none;
 }
 
 .el-button--default,
@@ -29,16 +29,16 @@
   border-radius: var(--radius-lg) !important;
   border: 1px solid var(--border-subtle) !important;
   background: var(--bg-surface) !important;
-  box-shadow: var(--shadow-1) !important;
+  box-shadow: none !important;
 }
 
 .el-card__body {
-  padding: 20px !important;
+  padding: 16px !important;
 }
 
 .el-dialog,
 .el-drawer {
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-lg) !important;
   border: 1px solid var(--border-subtle) !important;
   background: var(--bg-elevated) !important;
   box-shadow: var(--shadow-3) !important;
@@ -47,18 +47,18 @@
 .el-dialog__header,
 .el-drawer__header {
   margin-right: 0 !important;
-  padding: 22px 24px 0 !important;
+  padding: 18px 20px 0 !important;
 }
 
 .el-dialog__body,
 .el-drawer__body {
-  padding: 20px 24px 24px !important;
+  padding: 16px 20px 20px !important;
 }
 
 .el-dialog__title,
 .el-drawer__title {
   color: var(--text-primary) !important;
-  font-size: 1.15rem !important;
+  font-size: 1rem !important;
   font-weight: 700 !important;
 }
 
@@ -67,7 +67,7 @@
 }
 
 .el-message {
-  border-radius: var(--radius-pill) !important;
+  border-radius: var(--radius-lg) !important;
   border: 1px solid var(--border-subtle) !important;
   background: color-mix(in srgb, var(--bg-elevated) 88%, white) !important;
   box-shadow: var(--shadow-2) !important;
@@ -75,7 +75,7 @@
 }
 
 .el-message-box {
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-lg) !important;
   border: 1px solid var(--border-subtle) !important;
   background: var(--bg-elevated) !important;
   box-shadow: var(--shadow-3) !important;
@@ -101,11 +101,11 @@
 }
 
 .el-form-item {
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .el-form-item__label {
-  padding-bottom: 8px !important;
+  padding-bottom: 6px !important;
   color: var(--text-secondary) !important;
   font-weight: 600 !important;
 }
@@ -119,8 +119,8 @@
 .el-select__wrapper,
 .el-date-editor .el-input__wrapper,
 .el-select .el-input__wrapper {
-  border-radius: 14px !important;
-  background: var(--bg-muted) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
   box-shadow: none !important;
   color: var(--text-primary) !important;
@@ -130,7 +130,7 @@
 .el-select__wrapper,
 .el-date-editor .el-input__wrapper,
 .el-select .el-input__wrapper {
-  min-height: 44px;
+  min-height: 38px;
 }
 
 .el-input__wrapper:hover,
@@ -139,7 +139,7 @@
 .el-select .el-input__wrapper:hover,
 .el-textarea__inner:hover {
   border-color: var(--border-strong) !important;
-  background: color-mix(in srgb, var(--bg-muted) 85%, white) !important;
+  background: var(--bg-surface) !important;
 }
 
 .el-input__wrapper.is-focus,
@@ -183,7 +183,7 @@
   border-radius: var(--radius-lg) !important;
   border: 1px solid var(--border-subtle) !important;
   background: var(--bg-elevated) !important;
-  box-shadow: var(--shadow-2) !important;
+  box-shadow: var(--shadow-3) !important;
 }
 
 .el-select-dropdown__item.is-selected {

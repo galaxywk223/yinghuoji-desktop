@@ -5,6 +5,7 @@
       subtitle="个性化您的萤火集体验"
       :custom-class="'settings-layout-container'"
       max-width="wide"
+      fill-height
     >
       <div class="settings-main-content">
         <aside class="settings-sidebar">

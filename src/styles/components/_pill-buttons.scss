@@ -1,14 +1,14 @@
 .pill-btn {
-  min-height: 42px;
-  padding: 0 18px;
+  min-height: 36px;
+  padding: 0 12px;
   border: none;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 600;
   transition:
     transform var(--motion-fast) var(--motion-ease),
@@ -23,9 +23,9 @@
 }
 
 .pill-btn.primary {
-  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-strong) 100%);
+  background: var(--brand-primary);
   color: var(--text-inverse);
-  box-shadow: var(--shadow-1);
+  box-shadow: none;
 }
 
 .pill-btn.secondary {
@@ -47,13 +47,14 @@
 }
 
 .pill-btn:not(:disabled):hover {
-  transform: translateY(-1px);
+  transform: none;
+  filter: brightness(0.98);
 }
 
 .pill-btn-group-horizontal,
 .pill-btn-group-vertical {
   display: flex;
-  gap: 12px;
+  gap: 8px;
 }
 
 .pill-btn-group-horizontal {

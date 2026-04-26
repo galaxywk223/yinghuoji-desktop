@@ -1,69 +1,146 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 
-export type ThemeId = "paper" | "midnight" | "forest" | "ocean" | "amber";
+export type ThemeFamilyId = "paper" | "ocean" | "forest" | "amber" | "midnight";
+export type ThemeMode = "light" | "dark";
+export type ThemeId = `${ThemeFamilyId}-${ThemeMode}`;
 
-type ThemeOption = {
+export type ThemeOption = {
   id: ThemeId;
+  family: ThemeFamilyId;
+  mode: ThemeMode;
   name: string;
-  mode: "light" | "dark";
+  shortName: string;
   preview: string;
   description: string;
 };
 
-const STORAGE_KEY = "app-theme";
-
-const LEGACY_THEME_MAP: Record<string, ThemeId> = {
-  light: "paper",
-  sakura: "paper",
-  latte: "amber",
-  ocean: "ocean",
-  forest: "forest",
-  dark: "midnight",
-  cyberpunk: "midnight",
-  violet: "midnight",
-  sunset: "amber",
-  coffee: "amber",
+export type ThemeFamilyOption = {
+  id: ThemeFamilyId;
+  name: string;
+  description: string;
+  themes: ThemeOption[];
 };
 
-const DEFAULT_THEME: ThemeId = "paper";
+const STORAGE_KEY = "app-theme";
+
+const DEFAULT_THEME: ThemeId = "paper-light";
+
+const LEGACY_THEME_MAP: Record<string, ThemeId> = {
+  light: "paper-light",
+  paper: "paper-light",
+  sakura: "paper-light",
+  latte: "amber-light",
+  ocean: "ocean-light",
+  forest: "forest-light",
+  amber: "amber-light",
+  dark: "midnight-dark",
+  midnight: "midnight-dark",
+  cyberpunk: "midnight-dark",
+  violet: "paper-dark",
+  sunset: "amber-light",
+  coffee: "amber-dark",
+};
 
 const THEME_OPTIONS: ThemeOption[] = [
   {
-    id: "paper",
-    name: "纸感晨雾",
+    id: "paper-light",
+    family: "paper",
     mode: "light",
-    preview: "linear-gradient(135deg, #8a9bce 0%, #f2ebdc 100%)",
-    description: "默认主题，灰蓝与暖米白的萤火集界面。",
+    name: "纸感晨雾 · 浅色",
+    shortName: "浅色",
+    preview: "linear-gradient(135deg, #ffffff 0%, #f1f2f0 52%, #7f56d9 100%)",
+    description: "中性浅色工作台，适合默认使用。",
   },
   {
-    id: "midnight",
-    name: "午夜墨蓝",
+    id: "paper-dark",
+    family: "paper",
     mode: "dark",
-    preview: "linear-gradient(135deg, #4f6aa8 0%, #0f172a 100%)",
-    description: "深色模式，适合夜间浏览与沉浸复盘。",
+    name: "纸感晨雾 · 深色",
+    shortName: "深色",
+    preview: "linear-gradient(135deg, #171a21 0%, #2c1c5f 58%, #b692f6 100%)",
+    description: "保留紫色强调的深色工作台。",
   },
   {
-    id: "forest",
-    name: "松林草稿",
+    id: "ocean-light",
+    family: "ocean",
     mode: "light",
-    preview: "linear-gradient(135deg, #5b8d77 0%, #ecf1e7 100%)",
-    description: "低饱和绿色，偏自然和长时阅读。",
+    name: "静海坐标 · 浅色",
+    shortName: "浅色",
+    preview: "linear-gradient(135deg, #ffffff 0%, #edf4f8 52%, #0e7090 100%)",
+    description: "冷静青蓝，适合统计和图表场景。",
   },
   {
-    id: "ocean",
-    name: "静海坐标",
-    mode: "light",
-    preview: "linear-gradient(135deg, #4f8ca6 0%, #ebf4f7 100%)",
-    description: "冷静青蓝，适合数据和图表场景。",
+    id: "ocean-dark",
+    family: "ocean",
+    mode: "dark",
+    name: "静海坐标 · 深色",
+    shortName: "深色",
+    preview: "linear-gradient(135deg, #0c1d28 0%, #123b4a 58%, #67e3f9 100%)",
+    description: "低亮度青蓝，适合夜间复盘。",
   },
   {
-    id: "amber",
-    name: "琥珀砂页",
+    id: "forest-light",
+    family: "forest",
     mode: "light",
-    preview: "linear-gradient(135deg, #b27a3e 0%, #f5ead6 100%)",
-    description: "暖砂色纸面感，更偏计划与整理。",
+    name: "松林草稿 · 浅色",
+    shortName: "浅色",
+    preview: "linear-gradient(135deg, #ffffff 0%, #edf3ea 52%, #157f3c 100%)",
+    description: "自然绿色，适合长时间阅读。",
   },
+  {
+    id: "forest-dark",
+    family: "forest",
+    mode: "dark",
+    name: "松林草稿 · 深色",
+    shortName: "深色",
+    preview: "linear-gradient(135deg, #121f1a 0%, #143c2a 58%, #75e0a7 100%)",
+    description: "安静深绿，适合专注和记录。",
+  },
+  {
+    id: "amber-light",
+    family: "amber",
+    mode: "light",
+    name: "琥珀砂页 · 浅色",
+    shortName: "浅色",
+    preview: "linear-gradient(135deg, #ffffff 0%, #f4ede3 52%, #b54708 100%)",
+    description: "暖砂色，适合计划与整理。",
+  },
+  {
+    id: "amber-dark",
+    family: "amber",
+    mode: "dark",
+    name: "琥珀砂页 · 深色",
+    shortName: "深色",
+    preview: "linear-gradient(135deg, #221a12 0%, #4a2e0a 58%, #fdb022 100%)",
+    description: "低亮度暖色，适合夜间计划。",
+  },
+  {
+    id: "midnight-light",
+    family: "midnight",
+    mode: "light",
+    name: "午夜墨蓝 · 浅色",
+    shortName: "浅色",
+    preview: "linear-gradient(135deg, #ffffff 0%, #eef2f8 52%, #344054 100%)",
+    description: "蓝灰浅色，偏专业报表界面。",
+  },
+  {
+    id: "midnight-dark",
+    family: "midnight",
+    mode: "dark",
+    name: "午夜墨蓝 · 深色",
+    shortName: "深色",
+    preview: "linear-gradient(135deg, #111827 0%, #202d53 58%, #8da4ef 100%)",
+    description: "默认深色主题，适合沉浸复盘。",
+  },
+];
+
+const FAMILY_META: Array<Omit<ThemeFamilyOption, "themes">> = [
+  { id: "paper", name: "纸感晨雾", description: "默认中性界面" },
+  { id: "ocean", name: "静海坐标", description: "青蓝数据界面" },
+  { id: "forest", name: "松林草稿", description: "绿色阅读界面" },
+  { id: "amber", name: "琥珀砂页", description: "暖色计划界面" },
+  { id: "midnight", name: "午夜墨蓝", description: "蓝灰专业界面" },
 ];
 
 function normalizeThemeId(rawTheme: string | null | undefined): ThemeId {
@@ -85,6 +162,13 @@ export const useThemeStore = defineStore("theme", () => {
   const currentTheme = ref<ThemeId>(DEFAULT_THEME);
 
   const themes = THEME_OPTIONS;
+
+  const themeFamilies = computed<ThemeFamilyOption[]>(() =>
+    FAMILY_META.map((family) => ({
+      ...family,
+      themes: themes.filter((theme) => theme.family === family.id),
+    })),
+  );
 
   const currentThemeMeta = computed(
     () => themes.find((theme) => theme.id === currentTheme.value) || themes[0],
@@ -110,6 +194,7 @@ export const useThemeStore = defineStore("theme", () => {
     currentTheme,
     currentThemeMeta,
     themes,
+    themeFamilies,
     isDark,
     setTheme,
     initTheme,

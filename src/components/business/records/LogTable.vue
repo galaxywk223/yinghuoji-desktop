@@ -464,7 +464,7 @@ const moodTitle = (mood) => {
   filter: brightness(0.99);
 }
 
-[data-theme="dark"] .ios-list-item {
+[data-theme$="-dark"] .ios-list-item {
   background:
     radial-gradient(circle at top left, var(--record-accent-soft, rgba(99, 102, 241, 0.16)) 0%, transparent 34%),
     linear-gradient(
@@ -475,28 +475,28 @@ const moodTitle = (mood) => {
   border-color: var(--record-border-dark, rgba(148, 163, 184, 0.2));
 }
 
-[data-theme="dark"] .col-category .category-path,
-[data-theme="dark"] .col-note .notes-toggle,
-[data-theme="dark"] .expanded-notes {
+[data-theme$="-dark"] .col-category .category-path,
+[data-theme$="-dark"] .col-note .notes-toggle,
+[data-theme$="-dark"] .expanded-notes {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 12px 24px -24px var(--record-glow, rgba(99, 102, 241, 0.22));
 }
 
-[data-theme="dark"] .col-time,
-[data-theme="dark"] .category-child {
+[data-theme$="-dark"] .col-time,
+[data-theme$="-dark"] .category-child {
   color: rgba(226, 232, 240, 0.78);
 }
 
-[data-theme="dark"] .col-category .category-parent {
+[data-theme$="-dark"] .col-category .category-parent {
   color: var(--record-chip-parent-dark, var(--record-chip-parent, var(--record-accent)));
 }
 
-[data-theme="dark"] .col-category .category-child {
+[data-theme$="-dark"] .col-category .category-child {
   color: var(--record-chip-child-dark, rgba(226, 232, 240, 0.78));
 }
 
-[data-theme="dark"] .col-category .category-separator {
+[data-theme$="-dark"] .col-category .category-separator {
   color: var(--record-chip-separator-dark, rgba(226, 232, 240, 0.62));
 }
 

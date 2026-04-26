@@ -160,24 +160,14 @@ const progressHint = computed(() => {
           stroke: var(--color-primary);
           transition:
             stroke-dashoffset 0.25s ease,
-            stroke 0.3s ease,
-            filter 0.3s ease;
-
-          [data-theme="cyberpunk"] & {
-            filter: drop-shadow(0 0 5px var(--color-primary));
-          }
+            stroke 0.3s ease;
         }
 
         &.inner {
           stroke: var(--color-accent);
           transition:
             stroke-dashoffset 0.2s linear,
-            stroke 0.3s ease,
-            filter 0.3s ease;
-
-          [data-theme="cyberpunk"] & {
-            filter: drop-shadow(0 0 6px var(--color-accent));
-          }
+            stroke 0.3s ease;
         }
       }
     }
@@ -205,9 +195,6 @@ const progressHint = computed(() => {
         white-space: nowrap;
         margin-bottom: 0.25rem; /* Slight optical adjustment */
 
-        [data-theme="cyberpunk"] & {
-          text-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
-        }
       }
 
       .time-label {
@@ -231,16 +218,10 @@ const progressHint = computed(() => {
   &.timer-active {
     .progress-ring-circle.outer {
       stroke: var(--color-accent);
-      [data-theme="cyberpunk"] & {
-        filter: drop-shadow(0 0 8px var(--color-accent));
-      }
     }
 
     .progress-ring-circle.inner {
       stroke: var(--color-primary-dark);
-      [data-theme="cyberpunk"] & {
-        filter: drop-shadow(0 0 8px var(--color-primary-dark));
-      }
     }
   }
 }

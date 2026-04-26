@@ -311,18 +311,3 @@
 .status-pill--quote {
   max-width: min(100%, 380px);
 }
-
-[data-theme="cyberpunk"] {
-  .dashboard-header {
-    border-color: rgba(0, 240, 255, 0.16);
-    box-shadow:
-      0 0 0 1px rgba(0, 240, 255, 0.04),
-      0 20px 44px rgba(0, 0, 0, 0.26);
-  }
-
-  .cheer-title {
-    opacity: 0.12;
-    color: var(--color-primary);
-    text-shadow: 0 0 42px rgba(0, 240, 255, 0.22);
-  }
-}

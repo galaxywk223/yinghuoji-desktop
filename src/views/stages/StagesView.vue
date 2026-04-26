@@ -3,87 +3,112 @@
     :title="{ icon: 'lucide:flag', text: '阶段管理' }"
     subtitle="梳理学习阶段，设置当前阶段并管理时间跨度"
     :custom-class="'settings-subpage'"
+    max-width="full"
+    fill-height
   >
-    <div class="stage-container">
-      <!-- Header -->
-      <div class="stage-header">
-        <div class="header-left">
-          <h4>阶段列表</h4>
-        </div>
-        <button class="btn-create-flat" @click="openCreate">
-          <span class="icon">+</span> 新建阶段
-        </button>
-      </div>
-
-      <!-- Stage List (Flat Table Style) -->
-      <div v-if="stages.length" class="stage-list-flat">
-        <div class="list-header">
-          <span class="col-name">名称</span>
-          <span class="col-date">时间范围</span>
-          <span class="col-actions">操作</span>
+    <div class="stage-workbench">
+      <div class="stage-container">
+        <!-- Header -->
+        <div class="stage-header">
+          <div class="header-left">
+            <h4>阶段列表</h4>
+          </div>
+          <button class="btn-create-flat" @click="openCreate">
+            <span class="icon">+</span> 新建阶段
+          </button>
         </div>
 
-        <div
-          v-for="stage in stages"
-          :key="stage.id"
-          class="stage-row"
-          :class="{ current: stage.id === activeStageId }"
-        >
-          <!-- Name Column -->
-          <div class="col-name">
-            <span class="stage-name">{{ stage.name }}</span>
-            <span v-if="stage.id === activeStageId" class="badge-current"
-              >当前</span
-            >
+        <!-- Stage List (Flat Table Style) -->
+        <div v-if="stages.length" class="stage-list-flat">
+          <div class="list-header">
+            <span class="col-name">名称</span>
+            <span class="col-date">时间范围</span>
+            <span class="col-actions">操作</span>
           </div>
 
-          <!-- Date Column -->
-          <div class="col-date">
-            <span class="date-text">
-              {{ formatDate(stage.start_date) }}
-              <span class="range-sep">~</span>
-              {{ getStageEndDate(stage.id) ? formatDate(getStageEndDate(stage.id)) : "至今" }}
-            </span>
-          </div>
+          <div
+            v-for="stage in stages"
+            :key="stage.id"
+            class="stage-row"
+            :class="{ current: stage.id === activeStageId }"
+          >
+            <!-- Name Column -->
+            <div class="col-name">
+              <span class="stage-name">{{ stage.name }}</span>
+              <span v-if="stage.id === activeStageId" class="badge-current"
+                >当前</span
+              >
+            </div>
 
-          <!-- Actions Column -->
-          <div class="col-actions">
-            <div class="action-group">
-              <button
-                v-if="stage.id !== activeStageId"
-                class="action-btn"
-                title="设为当前"
-                :disabled="loading"
-                @click="applyStage(stage)"
-              >
-                🚩
-              </button>
-              <button
-                class="action-btn"
-                title="编辑"
-                :disabled="loading"
-                @click="openEdit(stage)"
-              >
-                ✏️
-              </button>
-              <button
-                class="action-btn danger"
-                title="删除"
-                :disabled="loading"
-                @click="confirmDelete(stage)"
-              >
-                🗑️
-              </button>
+            <!-- Date Column -->
+            <div class="col-date">
+              <span class="date-text">
+                {{ formatDate(stage.start_date) }}
+                <span class="range-sep">~</span>
+                {{ getStageEndDate(stage.id) ? formatDate(getStageEndDate(stage.id)) : "至今" }}
+              </span>
+            </div>
+
+            <!-- Actions Column -->
+            <div class="col-actions">
+              <div class="action-group">
+                <button
+                  v-if="stage.id !== activeStageId"
+                  class="action-btn"
+                  title="设为当前"
+                  :disabled="loading"
+                  @click="applyStage(stage)"
+                >
+                  🚩
+                </button>
+                <button
+                  class="action-btn"
+                  title="编辑"
+                  :disabled="loading"
+                  @click="openEdit(stage)"
+                >
+                  ✏️
+                </button>
+                <button
+                  class="action-btn danger"
+                  title="删除"
+                  :disabled="loading"
+                  @click="confirmDelete(stage)"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
           </div>
         </div>
+
+        <div v-else class="empty-state stage-empty">
+          <div class="empty-icon">📭</div>
+          <p>还没有创建任何阶段</p>
+          <button class="btn-create-flat" @click="openCreate">立即创建</button>
+        </div>
       </div>
 
-      <div v-else class="empty-state">
-        <div class="empty-icon">📭</div>
-        <p>还没有创建任何阶段</p>
-        <button class="btn-create-flat" @click="openCreate">立即创建</button>
-      </div>
+      <aside class="stage-inspector">
+        <section class="stage-inspector-card">
+          <p class="inspector-eyebrow">当前阶段</p>
+          <strong>{{ activeStageName }}</strong>
+          <span>{{ stageCount ? "用于记录和统计默认归属" : "创建阶段后即可启用" }}</span>
+        </section>
+        <section class="stage-inspector-card">
+          <p class="inspector-eyebrow">阶段数量</p>
+          <strong>{{ stageCount }}</strong>
+          <span>个学习阶段</span>
+        </section>
+        <section class="stage-inspector-card stage-inspector-card--muted">
+          <p class="inspector-eyebrow">管理规则</p>
+          <ul>
+            <li>最新阶段排在列表上方。</li>
+            <li>切换当前阶段会影响新增记录的默认归属。</li>
+            <li>删除阶段会同时删除其下记录，操作前需要确认。</li>
+          </ul>
+        </section>
+      </aside>
     </div>
 
     <!-- Create/Edit Dialog -->
@@ -149,6 +174,12 @@ const loading = computed(() => stageStore.loading);
 const stages = computed(() => stageStore.stages);
 const activeStageId = computed(
   () => settingsStore.activeStageId || stageStore.activeStage?.id,
+);
+const stageCount = computed(() => stages.value.length);
+const activeStageName = computed(
+  () =>
+    stages.value.find((stage) => stage.id === activeStageId.value)?.name ||
+    "未设置",
 );
 
 const dialogVisible = ref(false);
@@ -291,10 +322,23 @@ function confirmDelete(stage) {
 <style scoped>
 .stage-container {
   width: 100%; /* Full width */
+  min-width: 0;
+  min-height: 100%;
   background: var(--surface-card);
   border-radius: 16px;
   border: 1px solid var(--stroke-soft); /* Flat border */
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.stage-workbench {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.32fr);
+  gap: 18px;
+  align-items: stretch;
 }
 
 .stage-header {
@@ -337,6 +381,7 @@ function confirmDelete(stage) {
 .stage-list-flat {
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .list-header {
@@ -436,6 +481,10 @@ function confirmDelete(stage) {
 }
 
 @media (max-width: 768px) {
+  .stage-workbench {
+    grid-template-columns: 1fr;
+  }
+
   .action-group {
     opacity: 1;
   }
@@ -492,17 +541,71 @@ function confirmDelete(stage) {
 
 .empty-state {
   text-align: center;
-  padding: 60px 0;
+  padding: 88px 20px;
   color: var(--color-text-muted);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  justify-content: center;
+  flex: 1;
+  min-height: 360px;
 }
 
 .empty-icon {
   font-size: 48px;
   margin-bottom: 8px;
+}
+
+.stage-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+}
+
+.stage-inspector-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke-soft);
+  background: var(--surface-card);
+}
+
+.stage-inspector-card strong {
+  display: block;
+  color: var(--color-text-heading);
+  font-size: 24px;
+  line-height: 1.25;
+  margin-bottom: 8px;
+}
+
+.stage-inspector-card span {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.stage-inspector-card--muted {
+  flex: 1;
+  background: var(--surface-card-muted);
+}
+
+.inspector-eyebrow {
+  margin: 0 0 10px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stage-inspector-card ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 /* Dialog Styles */
