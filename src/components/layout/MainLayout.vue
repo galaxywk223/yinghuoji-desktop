@@ -19,13 +19,13 @@
           <BrandMark />
         </div>
         <div class="sidebar-header__copy">
-          <span class="sidebar-header__eyebrow">Learning OS</span>
+          <span class="sidebar-header__eyebrow">学习陪伴</span>
           <span class="logo-text">萤火集</span>
         </div>
       </div>
 
       <section class="sidebar-section">
-        <span class="sidebar-section__title">Workspace</span>
+        <span class="sidebar-section__title">常用页面</span>
         <nav class="sidebar-nav">
           <router-link
             v-for="item in navItems"
@@ -41,7 +41,7 @@
       </section>
 
       <div class="sidebar-footer">
-        <p>记录、分析、规划。让学习节奏更清晰。</p>
+        <p>记录每天的投入，慢慢看见自己的变化。</p>
         <p>萤火集 3.0</p>
       </div>
     </aside>
@@ -59,7 +59,7 @@
           </button>
           <div class="main-topbar__route">
             <h2 class="main-topbar__route-title">{{ currentRouteTitle }}</h2>
-            <span class="main-topbar__route-subtitle">安静的学习操作系统</span>
+            <span class="main-topbar__route-subtitle">把学习节奏留在每天的记录里</span>
           </div>
         </div>
 
@@ -107,12 +107,12 @@ const mobileNavOpen = ref(false);
 
 const navItems = [
   { to: "/dashboard", label: "仪表盘", icon: "lucide:layout-dashboard" },
-  { to: "/focus", label: "专注模式", icon: "lucide:timer-reset" },
+  { to: "/focus", label: "专注计时", icon: "lucide:timer-reset" },
   { to: "/records", label: "学习记录", icon: "lucide:notebook-tabs" },
-  { to: "/charts", label: "统计分析", icon: "lucide:chart-column-big" },
+  { to: "/charts", label: "学习回顾", icon: "lucide:chart-column-big" },
   { to: "/countdown", label: "倒计时", icon: "lucide:calendar-clock" },
   { to: "/milestones", label: "成就时刻", icon: "lucide:trophy" },
-  { to: "/settings", label: "设置中心", icon: "lucide:settings-2" },
+  { to: "/settings", label: "偏好设置", icon: "lucide:settings-2" },
 ];
 
 const currentRouteTitle = computed(() => {

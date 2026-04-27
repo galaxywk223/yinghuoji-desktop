@@ -12,19 +12,19 @@
           <nav class="settings-nav">
             <router-link to="/settings/data" class="settings-nav-item">
               <Icon icon="lucide:database" />
-              <span>数据管理</span>
+              <span>学习数据</span>
             </router-link>
             <router-link to="/settings/stages" class="settings-nav-item">
               <Icon icon="lucide:flag" />
-              <span>阶段管理</span>
+              <span>学习阶段</span>
             </router-link>
             <router-link to="/settings/categories" class="settings-nav-item">
               <Icon icon="lucide:folder" />
-              <span>分类管理</span>
+              <span>学习分类</span>
             </router-link>
             <router-link to="/settings/mottos" class="settings-nav-item">
               <Icon icon="lucide:message-square-quote" />
-              <span>格言管理</span>
+              <span>每日一句</span>
             </router-link>
             <router-link to="/settings/about" class="settings-nav-item">
               <Icon icon="lucide:info" />

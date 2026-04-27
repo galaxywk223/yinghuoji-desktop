@@ -32,13 +32,13 @@ const routes: RouteRecordRaw[] = [
         path: "categories",
         name: "Categories",
         component: () => import("@/views/categories/CategoriesView.vue"),
-        meta: { title: "分类管理" },
+        meta: { title: "学习分类" },
       },
       {
         path: "stages",
         name: "Stages",
         component: () => import("@/views/stages/StagesView.vue"),
-        meta: { title: "阶段管理" },
+        meta: { title: "学习阶段" },
       },
       {
         path: "milestones",
@@ -51,7 +51,7 @@ const routes: RouteRecordRaw[] = [
         name: "MilestoneCategories",
         component: () =>
           import("@/views/milestones/MilestoneCategoryManager.vue"),
-        meta: { title: "成就分类管理" },
+        meta: { title: "成就分类" },
       },
       {
         path: "countdown",
@@ -63,13 +63,13 @@ const routes: RouteRecordRaw[] = [
         path: "focus",
         name: "Focus",
         component: () => import("@/views/focus/FocusView.vue"),
-        meta: { title: "专注模式" },
+        meta: { title: "专注计时" },
       },
       {
         path: "charts",
         name: "Charts",
         component: () => import("@/views/charts/ChartsView.vue"),
-        meta: { title: "统计分析" },
+        meta: { title: "学习回顾" },
       },
       {
         path: "settings",
@@ -84,28 +84,28 @@ const routes: RouteRecordRaw[] = [
             path: "data",
             name: "SettingsData",
             component: () => import("@/views/settings/Data.vue"),
-            meta: { title: "数据管理" },
+            meta: { title: "学习数据" },
           },
-          // 新增：阶段管理（与顶层 /stages 复用同一组件）
+          // 新增：学习阶段（与顶层 /stages 复用同一组件）
           {
             path: "stages",
             name: "SettingsStages",
             component: () => import("@/views/stages/StagesView.vue"),
-            meta: { title: "阶段管理" },
+            meta: { title: "学习阶段" },
           },
-          // 新增：分类管理（与顶层 /categories 复用同一组件）
+          // 新增：学习分类（与顶层 /categories 复用同一组件）
           {
             path: "categories",
             name: "SettingsCategories",
             component: () => import("@/views/categories/CategoriesView.vue"),
-            meta: { title: "分类管理" },
+            meta: { title: "学习分类" },
           },
-          // 新增：格言管理（占位组件）
+          // 新增：每日一句（占位组件）
           {
             path: "mottos",
             name: "SettingsMottos",
             component: () => import("@/views/settings/MottoManagement.vue"),
-            meta: { title: "格言管理" },
+            meta: { title: "每日一句" },
           },
           {
             path: "about",

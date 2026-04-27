@@ -1,7 +1,7 @@
 <template>
   <div class="focus-view">
     <PageContainer
-      :title="{ icon: 'lucide:timer-reset', text: isTimerRunning ? '专注中' : '专注计时' }"
+      :title="{ icon: 'lucide:timer-reset', text: '专注计时' }"
       subtitle="专心做一件事，把每一段投入都记下来"
       header-variant="hero"
       max-width="full"
@@ -282,7 +282,7 @@ const loadData = async () => {
 
     // 检查是否有激活的阶段
     if (!stageStore.activeStage) {
-      ElMessage.warning("请先在阶段管理中创建并激活一个学习阶段");
+      ElMessage.warning("请先在学习阶段中创建并启用当前阶段");
       return;
     }
 
@@ -376,7 +376,7 @@ const saveRecord = async () => {
 
     // 检查是否有激活的阶段
     if (!stageStore.activeStage) {
-      ElMessage.error("请先在阶段管理中创建并激活一个学习阶段");
+      ElMessage.error("请先在学习阶段中创建并启用当前阶段");
       loading.value = false;
       return;
     }

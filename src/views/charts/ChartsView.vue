@@ -51,7 +51,7 @@
                   v-if="['categories', 'cattrend'].includes(charts.activeTab)"
                   class="panel-tag accent"
                 >
-                  {{ metricMode === "duration" ? "时长口径" : "效率口径" }}
+                  {{ metricMode === "duration" ? "按时长看" : "按效率看" }}
                 </span>
                 <span
                   v-if="charts.activeTab === 'categories' && isDrilldown"
@@ -436,9 +436,9 @@ const tabItems = [
     brief: "先看今天和最近一段时间的状态",
     icon: "lucide:layout-dashboard",
     kicker: "Overview Snapshot",
-    title: "把今天、昨天和近30天的核心状态先看明白",
-    description: "适合快速扫一眼当前节奏、波动水平，以及最近最占时间和最高效率的方向。",
-    panelKicker: "总体概览",
+    title: "先看看今天和最近一段时间的状态",
+    description: "适合快速回顾今天、昨天，以及最近一段时间的大致表现。",
+    panelKicker: "最近状态",
     panelTitle: "今天与近期状态",
     panelDescription: "先快速看今天、昨天和最近一段时间的表现，再决定要不要继续往下看。",
   },
@@ -452,7 +452,7 @@ const tabItems = [
     description: "适合快速查看最近的投入变化，以及接下来一段时间的大致趋势。",
     panelKicker: "学习趋势",
     panelTitle: "查看学习节奏变化与未来参考",
-    panelDescription: "这里只保留普通用户最需要的信息，用周视图和日视图查看整体走势会更直接。",
+    panelDescription: "用周视图和日视图看看最近的变化，再把未来趋势当作一个轻量参考。",
   },
   {
     value: "categories",
@@ -460,11 +460,11 @@ const tabItems = [
     brief: "看时间主要花在了哪些方向",
     icon: "lucide:pie-chart",
     kicker: "Category Mix",
-    title: "快速看清时间被哪些分类真正占据",
-    description: "适合判断投入是否过于集中，或者某个重点方向是否已经形成稳定占比。",
-    panelKicker: "分类结构",
-    panelTitle: "按分类拆开你的学习投入",
-    panelDescription: "支持下钻到子分类，观察不同主题在当前筛选范围内的真实分布。",
+    title: "看看时间主要花在了哪些学习方向上",
+    description: "适合判断最近的投入是不是过于集中，或者重点有没有放对地方。",
+    panelKicker: "学习分布",
+    panelTitle: "看看时间主要花在了哪里",
+    panelDescription: "先看大方向，再点开某个分类继续看下面的细分内容。",
   },
   {
     value: "cattrend",
@@ -472,11 +472,11 @@ const tabItems = [
     brief: "看某个方向在不同时间里的变化",
     icon: "lucide:route",
     kicker: "Category Trend",
-    title: "把某一类学习内容单独拉出来看变化",
-    description: "适合追踪刷题、课程、复盘等单个方向是否持续推进，是否出现断档。",
-    panelKicker: "分类趋势",
-    panelTitle: "跟踪单个分类的连续变化",
-    panelDescription: "切换不同分类和子分类，查看它们在一段时间内的投入与效率表现。",
+    title: "单独看看某个学习方向最近怎么变",
+    description: "适合追踪课程、刷题、复盘这类单一方向是不是一直在推进。",
+    panelKicker: "分类变化",
+    panelTitle: "看看某个方向最近怎么变",
+    panelDescription: "换不同分类和子分类，看看它们最近的投入和效率变化。",
   },
 ] as const;
 
