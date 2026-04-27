@@ -1,7 +1,7 @@
 <template>
   <PageContainer
-    :title="{ icon: 'lucide:message-square-quote', text: '格言管理' }"
-    subtitle="写下一句激励你的话语，启发每一天。"
+    :title="{ icon: 'lucide:message-square-quote', text: '每日一句' }"
+    subtitle="写下想提醒自己的话，在打开应用时看到它"
     :custom-class="'settings-subpage'"
     max-width="full"
     fill-height

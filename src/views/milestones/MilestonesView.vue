@@ -1,7 +1,7 @@
 ﻿<template>
   <PageContainer
     :title="{ icon: 'lucide:trophy', text: '成就时刻' }"
-    subtitle="记录下每一个值得纪念的闪光瞬间。"
+    subtitle="把值得纪念的进步、突破和高光时刻记下来"
     :custom-class="'milestones-view'"
     max-width="wide"
   >

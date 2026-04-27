@@ -1,8 +1,8 @@
 <template>
   <div class="charts-view">
     <PageContainer
-      :title="{ icon: 'lucide:chart-column-big', text: '统计分析' }"
-      subtitle="通过数据洞察学习模式，掌握成长轨迹"
+      :title="{ icon: 'lucide:chart-column-big', text: '学习回顾' }"
+      subtitle="从记录里看看最近的节奏、变化和重点"
       max-width="full"
     >
       <div class="charts-layout">
@@ -432,32 +432,32 @@ const skipNextActivationRefresh = ref(true);
 const tabItems = [
   {
     value: "overview",
-    label: "总体概览",
-    brief: "先看今天表现和近30天关键指标",
+    label: "今日概览",
+    brief: "先看今天和最近一段时间的状态",
     icon: "lucide:layout-dashboard",
     kicker: "Overview Snapshot",
     title: "把今天、昨天和近30天的核心状态先看明白",
     description: "适合快速扫一眼当前节奏、波动水平，以及最近最占时间和最高效率的方向。",
     panelKicker: "总体概览",
-    panelTitle: "关键指标与近期表现",
-    panelDescription: "把原先趋势分析顶部的信息单独收拢成一个概览面板，先看结论，再决定往下钻。",
+    panelTitle: "今天与近期状态",
+    panelDescription: "先快速看今天、昨天和最近一段时间的表现，再决定要不要继续往下看。",
   },
   {
     value: "trends",
-    label: "趋势分析",
-    brief: "专注看时长和效率的连续走势",
+    label: "学习趋势",
+    brief: "看学习节奏变化和未来参考",
     icon: "lucide:chart-no-axes-combined",
-    kicker: "Trend Focus",
-    title: "把学习节奏和效率变化放到同一张图里看",
-    description: "适合观察阶段切换、临近考试和休息周期对学习投入的影响。",
-    panelKicker: "趋势分析",
-    panelTitle: "时长与效率的双轴变化",
-    panelDescription: "现在这里只保留趋势图本身，用周视图和日视图切换整体走势，阅读会更轻一些。",
+    kicker: "Learning Rhythm",
+    title: "看学习节奏变化与未来参考",
+    description: "适合快速查看最近的投入变化，以及接下来一段时间的大致趋势。",
+    panelKicker: "学习趋势",
+    panelTitle: "查看学习节奏变化与未来参考",
+    panelDescription: "这里只保留普通用户最需要的信息，用周视图和日视图查看整体走势会更直接。",
   },
   {
     value: "categories",
-    label: "分类占比",
-    brief: "看时间分布集中在哪些方向",
+    label: "学习分布",
+    brief: "看时间主要花在了哪些方向",
     icon: "lucide:pie-chart",
     kicker: "Category Mix",
     title: "快速看清时间被哪些分类真正占据",
@@ -468,8 +468,8 @@ const tabItems = [
   },
   {
     value: "cattrend",
-    label: "分类趋势",
-    brief: "看单一分类在不同时间点的强弱",
+    label: "分类变化",
+    brief: "看某个方向在不同时间里的变化",
     icon: "lucide:route",
     kicker: "Category Trend",
     title: "把某一类学习内容单独拉出来看变化",

@@ -9,7 +9,9 @@
             <span class="weekday-icon emoji-icon">{{
               getWeekdayIcon(day.date)
             }}</span>
-            {{ formatDate(day.date) }} (周{{ getWeekday(day.date) }})
+            <span class="date-text"
+              >{{ formatDate(day.date) }} (周{{ getWeekday(day.date) }})</span
+            >
           </span>
           <span class="day-log-count">{{ day.logs.length }} 条记录</span>
         </div>
@@ -151,14 +153,15 @@ const getProgressColor = (duration) => {
   .day-card-header {
     display: grid;
     align-items: center;
-    grid-template-columns: minmax(200px, auto) minmax(200px, 1fr) auto;
+    grid-template-columns: minmax(260px, auto) minmax(240px, 1fr) auto;
     gap: 16px;
 
     .day-title-group {
       display: flex;
-      flex-direction: column;
+      align-items: center;
       gap: 10px;
       min-width: 0;
+      white-space: nowrap;
     }
 
     .date-badge {
@@ -168,10 +171,19 @@ const getProgressColor = (duration) => {
       display: flex;
       align-items: center;
       gap: 8px;
+      min-width: 0;
 
       .weekday-icon {
         font-size: 20px;
+        flex-shrink: 0;
       }
+    }
+
+    .date-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .day-log-count {
@@ -183,6 +195,8 @@ const getProgressColor = (duration) => {
       color: var(--color-text-secondary);
       font-size: 13px;
       font-weight: 600;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
 
     .daily-progress-panel {
@@ -223,7 +237,8 @@ const getProgressColor = (duration) => {
       align-items: center;
       justify-content: flex-end;
       gap: 10px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      flex-shrink: 0;
     }
 
     .metric-pill {
@@ -237,6 +252,7 @@ const getProgressColor = (duration) => {
       color: var(--color-text-secondary);
       font-size: 14px;
       font-weight: 600;
+      white-space: nowrap;
 
       .metric-icon {
         width: 14px;
@@ -280,8 +296,14 @@ const getProgressColor = (duration) => {
       align-items: stretch;
     }
 
+    .day-card-header .day-title-group {
+      align-items: flex-start;
+      white-space: normal;
+    }
+
     .day-metrics {
       justify-content: flex-start;
+      flex-wrap: wrap;
     }
   }
 }

@@ -1,7 +1,7 @@
 <template>
   <PageContainer
     :title="{ icon: 'lucide:info', text: '关于与更新' }"
-    subtitle="查看当前安装版本，并在正式安装版中手动检查桌面更新。"
+    subtitle="查看当前版本，了解应用信息和更新状态"
     :custom-class="'settings-subpage'"
     max-width="full"
     fill-height

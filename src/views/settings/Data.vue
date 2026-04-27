@@ -1,7 +1,7 @@
 ﻿<template>
   <PageContainer
-    :title="{ icon: 'lucide:database', text: '数据管理' }"
-    subtitle="备份、恢复或清空您的学习数据"
+    :title="{ icon: 'lucide:database', text: '学习数据' }"
+    subtitle="备份、恢复或整理你的学习数据"
     :custom-class="'settings-subpage'"
     max-width="full"
     fill-height

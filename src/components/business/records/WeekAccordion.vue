@@ -17,7 +17,9 @@
           <div class="week-title-block">
             <span class="week-title">
               <span class="emoji-icon" aria-hidden="true">📅</span>
-              <span>{{ week.year }} 年 · 第 {{ week.week_num }} 周</span>
+              <span class="week-title-text"
+                >{{ week.year }} 年 · 第 {{ week.week_num }} 周</span
+              >
             </span>
             <div class="week-meta">
               <span class="week-chip">{{ getWeekRecordCount(week) }} 条记录</span>
@@ -141,37 +143,49 @@ const formatWeekDuration = (week) => {
 
   .week-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     gap: 18px;
     width: 100%;
+    min-width: 0;
   }
 
   .week-title-block {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: 12px;
+    flex: 1 1 auto;
     min-width: 0;
+  }
 
-    .week-title {
-      font-size: 24px;
-      font-weight: 800;
-      color: var(--color-text-heading);
-      letter-spacing: -0.04em;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+  .week-title {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--color-text-heading);
+    letter-spacing: -0.04em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1 1 auto;
 
-      .emoji-icon {
-        font-size: 22px;
-      }
+    .emoji-icon {
+      font-size: 22px;
+      flex-shrink: 0;
     }
+  }
+
+  .week-title-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .week-meta {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
+    flex: 0 0 auto;
   }
 
   .week-chip {
@@ -185,6 +199,7 @@ const formatWeekDuration = (week) => {
     color: var(--color-text-secondary);
     font-size: 13px;
     font-weight: 600;
+    white-space: nowrap;
   }
 
   .week-eff {
@@ -221,8 +236,15 @@ const formatWeekDuration = (week) => {
       align-items: flex-start;
     }
 
+    .week-title-block {
+      width: 100%;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
     .week-title-block .week-title {
       font-size: 21px;
+      flex: none;
     }
 
     .week-eff {

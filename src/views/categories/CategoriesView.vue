@@ -1,7 +1,7 @@
 <template>
   <PageContainer
-    :title="{ icon: 'lucide:folder-tree', text: '分类管理' }"
-    subtitle="维护学习分类与子分类层级结构"
+    :title="{ icon: 'lucide:folder-tree', text: '学习分类' }"
+    subtitle="整理学习方向，记录和回顾都会更清楚"
     :custom-class="'settings-subpage'"
     max-width="full"
     fill-height

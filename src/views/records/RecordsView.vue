@@ -1,7 +1,7 @@
 <template>
   <PageContainer
     :title="{ icon: 'lucide:notebook-tabs', text: '学习记录' }"
-    subtitle="在这里回顾每一次努力，见证成长的每一步。"
+    subtitle="按时间回看每一次投入、进展和变化"
     :custom-class="'records-view'"
     max-width="wide"
     sticky-actions

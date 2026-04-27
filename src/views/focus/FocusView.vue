@@ -2,7 +2,7 @@
   <div class="focus-view">
     <PageContainer
       :title="{ icon: 'lucide:timer-reset', text: isTimerRunning ? '专注中' : '专注计时' }"
-      subtitle="保持专注，记录每一步的累积"
+      subtitle="专心做一件事，把每一段投入都记下来"
       header-variant="hero"
       max-width="full"
       fill-height

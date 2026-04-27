@@ -1,8 +1,8 @@
 <template>
   <div class="leaderboard-view">
     <PageContainer
-      :title="{ icon: 'lucide:users-round', text: '社区排行' }"
-      subtitle="实时查看社区学习时长与效率榜单，点选用户了解详情"
+      :title="{ icon: 'lucide:users-round', text: '社区榜单' }"
+      subtitle="看看大家最近的学习表现，也看看自己现在的位置"
       max-width="wide"
     >
       <section class="leaderboard-toolbar">

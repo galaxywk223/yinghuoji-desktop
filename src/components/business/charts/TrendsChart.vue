@@ -18,21 +18,10 @@
     <div v-else v-loading="loading" class="trend-chart-card__panel">
       <header class="trend-chart-card__header">
         <div class="trend-chart-card__titles">
-          <span class="trend-chart-card__eyebrow">Trend Forecast</span>
           <h3>学习趋势</h3>
           <p>{{ forecastMeta }}</p>
         </div>
         <div class="trend-chart-card__switch">
-          <button
-            class="trend-chart-card__retrain-btn"
-            :disabled="loading || forecastRetraining || forecastStatus?.state === 'pending'"
-            @click="emit('retrain-forecast')"
-          >
-            <span class="trend-chart-card__retrain-icon">
-              {{ forecastRetraining ? "•••" : "↻" }}
-            </span>
-            <span>{{ forecastRetraining ? "重训练中" : "手动重训练" }}</span>
-          </button>
           <div class="trend-chart-card__view-toggle">
             <button
               :class="['seg-btn', currentView === 'weekly' && 'active']"
@@ -51,49 +40,11 @@
           </div>
         </div>
       </header>
-      <div class="trend-chart-card__meta-strip">
-        <span
-          v-for="item in forecastBadgeItems"
-          :key="item.label"
-          class="trend-chart-card__meta-pill"
-          :class="item.emphasis ? 'trend-chart-card__meta-pill--emphasis' : ''"
-        >
-          <strong>{{ item.label }}</strong>
-          <span>{{ item.value }}</span>
-        </span>
-      </div>
       <div
         v-if="forecastWarning"
         class="trend-chart-card__forecast-warning"
       >
         {{ forecastWarning }}
-      </div>
-      <div class="trend-chart-card__forecast-grid">
-        <article
-          v-for="item in forecastCards"
-          :key="item.key"
-          class="trend-chart-card__forecast-card"
-          :class="`trend-chart-card__forecast-card--${item.tone}`"
-        >
-          <div class="trend-chart-card__forecast-card-head">
-            <div>
-              <span class="trend-chart-card__forecast-card-label">
-                {{ item.title }}
-              </span>
-              <strong>{{ item.status }}</strong>
-            </div>
-            <span class="trend-chart-card__forecast-chip">
-              {{ item.model }}
-            </span>
-          </div>
-          <p class="trend-chart-card__forecast-card-summary">
-            {{ item.summary }}
-          </p>
-          <div class="trend-chart-card__forecast-card-metrics">
-            <span>{{ item.metricA }}</span>
-            <span>{{ item.metricB }}</span>
-          </div>
-        </article>
       </div>
       <v-chart
         :key="chartRenderKey"
@@ -229,31 +180,6 @@ const normalizeForecast = (forecast) => ({
   reason: typeof forecast?.reason === "string" ? forecast.reason : "",
 });
 
-const formatPercent = (value, digits = 1) => {
-  if (value == null || Number.isNaN(Number(value))) return "--";
-  return `${(Number(value) * 100).toFixed(digits)}%`;
-};
-
-const formatMetric = (value, digits = 2) => {
-  if (value == null || Number.isNaN(Number(value))) return "--";
-  return Number(value).toFixed(digits);
-};
-
-const formatImprovement = (baseline, current) => {
-  if (
-    baseline == null ||
-    current == null ||
-    Number.isNaN(Number(baseline)) ||
-    Number.isNaN(Number(current)) ||
-    Number(baseline) <= 0
-  ) {
-    return "";
-  }
-  const improvement = (Number(baseline) - Number(current)) / Number(baseline);
-  const prefix = improvement >= 0 ? "+" : "";
-  return `${prefix}${(improvement * 100).toFixed(1)}%`;
-};
-
 const normalizeLabel = (value) => {
   if (value == null) return "";
   return String(value).trim();
@@ -334,25 +260,22 @@ const forecastMeta = computed(() => {
   const { duration, efficiency } = currentForecasts.value;
   const hasPending =
     duration.status === "pending" || efficiency.status === "pending";
+  const conservative =
+    duration.status === "conservative" || efficiency.status === "conservative";
   const activeForecast = duration.available ? duration : efficiency;
-  const threshold = formatPercent(activeForecast.accuracyThreshold || 0.4);
-  if (hasPending) {
-    return `基于全部历史训练 · 预测后台生成中 · 精度门槛 WAPE <= ${threshold}`;
-  }
-  if (!activeForecast.available) {
-    return `预测基于全部历史训练 · 精度门槛 WAPE <= ${threshold}`;
-  }
   const unit = currentView.value === "weekly" ? "周" : "天";
-  const ongoingSuffix = hasOngoingPeriod.value ? " · 含当前进行中周期" : "";
-  return `基于全部历史训练 · 未来 ${activeForecast.horizon}${unit}预测${ongoingSuffix} · 精度门槛 WAPE <= ${threshold}`;
-});
 
-const lastTrainingLabel = computed(() => {
-  const trainedForDate = props.forecastStatus?.trained_for_date;
-  if (!trainedForDate) {
-    return "尚未完成今日训练";
+  if (hasPending) {
+    return "预测正在生成中，先展示已有的历史趋势。";
   }
-  return `最近训练 ${trainedForDate}`;
+  if (conservative) {
+    return `基于历史记录生成的未来 ${activeForecast.horizon || 0}${unit}保守参考趋势。`;
+  }
+  if (!duration.available && !efficiency.available) {
+    return "历史记录还不够，暂时无法生成未来趋势参考。";
+  }
+  const ongoingSuffix = hasOngoingPeriod.value ? "，包含当前进行中的周期" : "";
+  return `基于历史记录生成的未来 ${activeForecast.horizon}${unit}参考趋势${ongoingSuffix}。`;
 });
 
 const forecastWarning = computed(() => {
@@ -367,121 +290,16 @@ const forecastWarning = computed(() => {
     (forecast) => forecast.status === "conservative",
   );
   if (conservative) {
-    return "当前结果为低置信保守预测。";
+    return "当前预测把握较低，仅提供保守参考。";
   }
   const missing = [];
   if (!duration.available) missing.push("时长");
   if (!efficiency.available) missing.push("效率");
   if (!missing.length) return "";
   if (missing.length === 2) {
-    return duration.reason || efficiency.reason || "历史数据不足，暂不提供预测";
+    return "历史记录还不够，暂时无法生成预测。";
   }
-  return `${missing[0]}${duration.reason || efficiency.reason || "历史数据不足，暂不提供预测"}`;
-});
-
-const forecastBadgeItems = computed(() => {
-  const { duration, efficiency } = currentForecasts.value;
-  const activeForecast = duration.available ? duration : efficiency;
-  const unit = currentView.value === "weekly" ? "周" : "天";
-  const items = [
-    {
-      label: "训练范围",
-      value: "全部历史",
-      emphasis: false,
-    },
-    {
-      label: "预测长度",
-      value: activeForecast.horizon ? `${activeForecast.horizon}${unit}` : "--",
-      emphasis: true,
-    },
-    {
-      label: "当前周期",
-      value: hasOngoingPeriod.value ? "含进行中" : "仅完整周期",
-      emphasis: false,
-    },
-    {
-      label: "训练状态",
-      value:
-        props.forecastStatus?.state === "pending"
-          ? "后台重算中"
-          : lastTrainingLabel.value,
-      emphasis: props.forecastStatus?.state === "ready",
-    },
-    {
-      label: "拦截门槛",
-      value: `WAPE <= ${formatPercent(activeForecast.accuracyThreshold || 0.4)}`,
-      emphasis: false,
-    },
-  ];
-  return items;
-});
-
-const forecastCards = computed(() => {
-  const items = [
-    {
-      key: "duration",
-      title: "时长预测",
-      forecast: currentForecasts.value.duration,
-    },
-    {
-      key: "efficiency",
-      title: "效率预测",
-      forecast: currentForecasts.value.efficiency,
-    },
-  ];
-
-  return items.map(({ key, title, forecast }) => {
-    const pending = forecast.status === "pending";
-    const conservative = forecast.status === "conservative";
-    const blocked =
-      !pending && !forecast.available && forecast.reason?.includes("误差较高");
-    const tone = pending
-      ? "pending"
-      : conservative
-        ? "blocked"
-        : forecast.available
-          ? "ready"
-          : blocked
-            ? "blocked"
-            : "idle";
-    const status = pending
-      ? "后台生成中"
-      : conservative
-        ? "保守预测"
-      : forecast.available
-        ? "预测已启用"
-        : "暂未启用";
-    const model = pending ? "等待结果" : forecast.modelName || "无模型";
-    const summary = pending
-      ? "先展示历史与进行中数据，预测完成后自动补齐。"
-      : conservative
-        ? forecast.fallbackFromModel
-          ? `当前结果为低置信保守预测，已从${forecast.fallbackFromModel}回退到保守基线。`
-          : "当前结果为低置信保守预测。"
-      : blocked
-        ? forecast.reason || "历史回测误差较高，暂不显示预测。"
-        : forecast.reason || "已按当前最优模型输出预测。";
-    const improvement = formatImprovement(
-      forecast.baselineWape,
-      forecast.validationWape,
-    );
-
-    return {
-      key,
-      title,
-      tone,
-      status,
-      model,
-      summary,
-      metricA: `WAPE ${formatPercent(forecast.validationWape)}`,
-      metricB:
-        forecast.baselineWape != null
-          ? improvement
-            ? `相对基线 ${improvement}`
-            : `基线 ${formatPercent(forecast.baselineWape)}`
-          : `RMSE ${formatMetric(forecast.validationRmse)}`,
-    };
-  });
+  return `${missing[0]}预测暂时不可用，其余趋势可继续参考。`;
 });
 
 const buildForecastLayer = (labels, actualSeries, forecast) => {
@@ -902,20 +720,6 @@ const chartOption = computed(() => {
           );
         }
 
-        if (durationForecast.available && durationForecastIndex >= 0) {
-          const idx = durationForecastIndex;
-          content += `<div style="margin-top:6px;color:${token.textSecondary};">时长区间：${durationForecast.lower[idx].toFixed(2)} - ${durationForecast.upper[idx].toFixed(2)}</div>`;
-          content += `<div style="color:${token.textSecondary};">时长模型：${durationForecast.modelName}</div>`;
-          content += `<div style="color:${token.textSecondary};">时长WAPE：${formatPercent(durationForecast.validationWape)}</div>`;
-          content += `<div style="color:${token.textSecondary};">时长RMSE：${formatMetric(durationForecast.validationRmse)}</div>`;
-        }
-        if (efficiencyForecast.available && efficiencyForecastIndex >= 0) {
-          const idx = efficiencyForecastIndex;
-          content += `<div style="margin-top:6px;color:${token.textSecondary};">效率区间：${efficiencyForecast.lower[idx].toFixed(2)} - ${efficiencyForecast.upper[idx].toFixed(2)}</div>`;
-          content += `<div style="color:${token.textSecondary};">效率模型：${efficiencyForecast.modelName}</div>`;
-          content += `<div style="color:${token.textSecondary};">效率WAPE：${formatPercent(efficiencyForecast.validationWape)}</div>`;
-          content += `<div style="color:${token.textSecondary};">效率RMSE：${formatMetric(efficiencyForecast.validationRmse)}</div>`;
-        }
         return content;
       },
     },

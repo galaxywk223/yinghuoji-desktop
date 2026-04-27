@@ -1,7 +1,7 @@
 <template>
   <PageContainer
-    :title="{ icon: 'lucide:flag', text: '阶段管理' }"
-    subtitle="梳理学习阶段，设置当前阶段并管理时间跨度"
+    :title="{ icon: 'lucide:flag', text: '学习阶段' }"
+    subtitle="把不同阶段整理清楚，回看记录会更顺手"
     :custom-class="'settings-subpage'"
     max-width="full"
     fill-height

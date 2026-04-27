@@ -1,15 +1,15 @@
 ﻿<template>
   <PageContainer
-    :title="{ icon: 'lucide:shapes', text: '成就分类管理' }"
-    subtitle="管理您的成就时刻分类标签。"
+    :title="{ icon: 'lucide:shapes', text: '成就分类' }"
+    subtitle="把成就标签整理清楚，记录起来会更方便。"
     :custom-class="'milestone-category-manager'"
     :max-width="900"
   >
     <div class="manager-card">
       <header class="manager-header">
         <div>
-          <h2>成就分类管理</h2>
-          <p>管理您的成就时刻分类标签。</p>
+          <h2>成就分类</h2>
+          <p>把成就标签整理清楚，记录起来会更方便。</p>
         </div>
       </header>
 

@@ -1,8 +1,8 @@
 <template>
   <div class="settings-shell">
     <PageContainer
-      :title="{ icon: 'lucide:settings-2', text: '设置中心' }"
-      subtitle="个性化您的萤火集体验"
+      :title="{ icon: 'lucide:settings-2', text: '偏好设置' }"
+      subtitle="把应用调整成更适合自己的样子"
       :custom-class="'settings-layout-container'"
       max-width="wide"
       fill-height
