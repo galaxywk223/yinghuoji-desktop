@@ -2,7 +2,7 @@
  * 专注计时器 composable
  * 处理计时器的逻辑和状态管理
  */
-import { ref, onUnmounted, type Ref } from "vue";
+import { ref, type Ref } from "vue";
 import type { FocusFormData } from "@/types";
 
 const FOCUS_STATE_KEY = "focus_session_state";
@@ -13,8 +13,13 @@ interface SavedState {
   isTimerRunning: boolean;
   isPaused: boolean;
   elapsedSeconds: number;
-  startTime: string | null;
-  pauseTime: string | null;
+  sessionStartTime?: string | null;
+  sessionEndTime?: string | null;
+  pauseStartedAt?: string | null;
+  currentRunStartedAt?: string | null;
+  accumulatedElapsedSeconds?: number;
+  startTime?: string | null;
+  pauseTime?: string | null;
 }
 
 // 返回值类型
@@ -23,8 +28,9 @@ interface UseFocusTimerReturn {
   isTimerRunning: Ref<boolean>;
   isPaused: Ref<boolean>;
   elapsedSeconds: Ref<number>;
-  startTime: Ref<Date | null>;
-  pauseTime: Ref<Date | null>;
+  sessionStartTime: Ref<Date | null>;
+  sessionEndTime: Ref<Date | null>;
+  pauseStartedAt: Ref<Date | null>;
 
   // 方法
   startTimer: (formData: FocusFormData) => void;
@@ -43,11 +49,28 @@ interface UseFocusTimerReturn {
 const isTimerRunning: Ref<boolean> = ref(false);
 const isPaused: Ref<boolean> = ref(false);
 const elapsedSeconds: Ref<number> = ref(0);
-const startTime: Ref<Date | null> = ref(null);
-const pauseTime: Ref<Date | null> = ref(null);
+const sessionStartTime: Ref<Date | null> = ref(null);
+const sessionEndTime: Ref<Date | null> = ref(null);
+const pauseStartedAt: Ref<Date | null> = ref(null);
+const currentRunStartedAt: Ref<Date | null> = ref(null);
+const accumulatedElapsedSeconds: Ref<number> = ref(0);
 const timerInterval: Ref<NodeJS.Timeout | number | null> = ref(null);
 
 export function useFocusTimer(): UseFocusTimerReturn {
+  const syncElapsedSeconds = (now = new Date()): number => {
+    if (!isTimerRunning.value || !currentRunStartedAt.value) {
+      elapsedSeconds.value = accumulatedElapsedSeconds.value;
+      return elapsedSeconds.value;
+    }
+
+    const diffSeconds = Math.max(
+      0,
+      Math.floor((now.getTime() - currentRunStartedAt.value.getTime()) / 1000),
+    );
+    elapsedSeconds.value = accumulatedElapsedSeconds.value + diffSeconds;
+    return elapsedSeconds.value;
+  };
+
   // 计时器状态（已移至全局）到 localStorage
   const saveState = (formData: FocusFormData): void => {
     const state: SavedState = {
@@ -55,8 +78,19 @@ export function useFocusTimer(): UseFocusTimerReturn {
       isTimerRunning: isTimerRunning.value,
       isPaused: isPaused.value,
       elapsedSeconds: elapsedSeconds.value,
-      startTime: startTime.value ? startTime.value.toISOString() : null,
-      pauseTime: pauseTime.value ? pauseTime.value.toISOString() : null,
+      sessionStartTime: sessionStartTime.value
+        ? sessionStartTime.value.toISOString()
+        : null,
+      sessionEndTime: sessionEndTime.value
+        ? sessionEndTime.value.toISOString()
+        : null,
+      pauseStartedAt: pauseStartedAt.value
+        ? pauseStartedAt.value.toISOString()
+        : null,
+      currentRunStartedAt: currentRunStartedAt.value
+        ? currentRunStartedAt.value.toISOString()
+        : null,
+      accumulatedElapsedSeconds: accumulatedElapsedSeconds.value,
     };
     localStorage.setItem(FOCUS_STATE_KEY, JSON.stringify(state));
   };
@@ -68,17 +102,10 @@ export function useFocusTimer(): UseFocusTimerReturn {
     }
 
     timerInterval.value = setInterval(() => {
-      // 检查 startTime 是否存在
-      if (!startTime.value) {
-        // 如果没有开始时间但定时器在跑，尝试恢复或者停止
+      if (!currentRunStartedAt.value) {
         return;
       }
-
-      const now = new Date();
-      // 使用精确的差异计算
-      const diff = now.getTime() - startTime.value.getTime();
-      // 有时候 diff 可能是负数（由于时间校准等），处理一下
-      elapsedSeconds.value = Math.max(0, Math.floor(diff / 1000));
+      syncElapsedSeconds();
     }, 1000);
   };
 
@@ -100,28 +127,37 @@ export function useFocusTimer(): UseFocusTimerReturn {
 
         isTimerRunning.value = state.isTimerRunning || false;
         isPaused.value = state.isPaused || false;
+        accumulatedElapsedSeconds.value =
+          state.accumulatedElapsedSeconds ?? state.elapsedSeconds ?? 0;
         elapsedSeconds.value = state.elapsedSeconds || 0;
 
-        if (state.startTime) {
-          startTime.value = new Date(state.startTime);
-        }
-        if (state.pauseTime) {
-          pauseTime.value = new Date(state.pauseTime);
-        }
+        const resolvedSessionStart =
+          state.sessionStartTime ?? state.startTime ?? null;
+        const resolvedPauseStartedAt =
+          state.pauseStartedAt ?? state.pauseTime ?? null;
 
-        // 如果计时器正在运行，且在内存中没有运行（例如刷新后），重启计时器
-        if (isTimerRunning.value && startTime.value) {
-          // 立即计算一次
-          const now = new Date();
-          const actualElapsed = Math.floor(
-            (now.getTime() - startTime.value.getTime()) / 1000,
-          );
-          elapsedSeconds.value = actualElapsed;
+        sessionStartTime.value = resolvedSessionStart
+          ? new Date(resolvedSessionStart)
+          : null;
+        sessionEndTime.value = state.sessionEndTime
+          ? new Date(state.sessionEndTime)
+          : null;
+        pauseStartedAt.value = resolvedPauseStartedAt
+          ? new Date(resolvedPauseStartedAt)
+          : null;
+        currentRunStartedAt.value = state.currentRunStartedAt
+          ? new Date(state.currentRunStartedAt)
+          : isTimerRunning.value && state.startTime
+            ? new Date(state.startTime)
+            : null;
 
-          // 确保定时器运行
+        if (isTimerRunning.value) {
+          syncElapsedSeconds();
           if (!timerInterval.value) {
             startTimerInterval();
           }
+        } else {
+          elapsedSeconds.value = accumulatedElapsedSeconds.value;
         }
 
         return state.formData;
@@ -144,15 +180,22 @@ export function useFocusTimer(): UseFocusTimerReturn {
     isTimerRunning.value = false;
     isPaused.value = false;
     elapsedSeconds.value = 0;
-    startTime.value = null;
-    pauseTime.value = null;
+    sessionStartTime.value = null;
+    sessionEndTime.value = null;
+    pauseStartedAt.value = null;
+    currentRunStartedAt.value = null;
+    accumulatedElapsedSeconds.value = 0;
     stopTimerInterval();
   };
 
   // 开始计时
   const startTimer = (formData: FocusFormData): void => {
     const now = new Date();
-    startTime.value = now;
+    sessionStartTime.value = now;
+    sessionEndTime.value = null;
+    pauseStartedAt.value = null;
+    currentRunStartedAt.value = now;
+    accumulatedElapsedSeconds.value = 0;
     isTimerRunning.value = true;
     isPaused.value = false;
     elapsedSeconds.value = 0;
@@ -166,29 +209,28 @@ export function useFocusTimer(): UseFocusTimerReturn {
   // 暂停计时
   const pauseTimer = (formData: FocusFormData): void => {
     if (isTimerRunning.value) {
-      pauseTime.value = new Date();
+      syncElapsedSeconds();
+      accumulatedElapsedSeconds.value = elapsedSeconds.value;
+      pauseStartedAt.value = new Date();
+      currentRunStartedAt.value = null;
       isTimerRunning.value = false;
       isPaused.value = true;
 
       stopTimerInterval();
       saveState(formData);
 
-      console.log("暂停专注计时:", pauseTime.value);
+      console.log("暂停专注计时:", pauseStartedAt.value);
     }
   };
 
   // 恢复计时
   const resumeTimer = (formData: FocusFormData): void => {
-    if (isPaused.value && pauseTime.value && startTime.value) {
-      const now = new Date();
-      const pauseDuration = now.getTime() - pauseTime.value.getTime();
-
-      // 调整开始时间，排除暂停时间
-      startTime.value = new Date(startTime.value.getTime() + pauseDuration);
-
+    if (isPaused.value && pauseStartedAt.value && sessionStartTime.value) {
+      currentRunStartedAt.value = new Date();
       isTimerRunning.value = true;
       isPaused.value = false;
-      pauseTime.value = null;
+      pauseStartedAt.value = null;
+      sessionEndTime.value = null;
 
       startTimerInterval();
       saveState(formData);
@@ -199,11 +241,20 @@ export function useFocusTimer(): UseFocusTimerReturn {
 
   // 停止计时
   const stopTimer = (): number => {
+    if (isTimerRunning.value) {
+      syncElapsedSeconds();
+      accumulatedElapsedSeconds.value = elapsedSeconds.value;
+      sessionEndTime.value = new Date();
+      currentRunStartedAt.value = null;
+    } else if (isPaused.value) {
+      elapsedSeconds.value = accumulatedElapsedSeconds.value;
+      sessionEndTime.value = pauseStartedAt.value
+        ? new Date(pauseStartedAt.value)
+        : new Date();
+    }
+
     const finalElapsed = elapsedSeconds.value;
     stopTimerInterval();
-    // 不自动清除状态，让 UI 决定何时清除（例如保存后）
-    // 但停止后不应该继续保存 Running 状态
-    // 这里保持简单，由调用者处理 clearState
     return finalElapsed;
   };
 
@@ -227,8 +278,9 @@ export function useFocusTimer(): UseFocusTimerReturn {
     isTimerRunning,
     isPaused,
     elapsedSeconds,
-    startTime,
-    pauseTime,
+    sessionStartTime,
+    sessionEndTime,
+    pauseStartedAt,
 
     // 方法
     startTimer,

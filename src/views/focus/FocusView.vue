@@ -182,7 +182,8 @@ const {
   isTimerRunning,
   isPaused,
   elapsedSeconds,
-  startTime: focusStartTime,
+  sessionStartTime,
+  sessionEndTime,
   startTimer: timerStart,
   pauseTimer: timerPause,
   resumeTimer: timerResume,
@@ -206,27 +207,35 @@ const stopForm = ref({
   notes: "",
 });
 
-const endTime = ref(null);
-
 const formRef = ref(null);
 const loading = ref(false);
 
 // 分类和子分类数据
-const categories = ref([]);
-const allSubcategories = ref([]); // 存储所有子分类
+const categories = computed(() => categoryStore.tree || []);
+const allSubcategories = computed(() =>
+  categories.value.flatMap((category) => {
+    const subs = category.subcategories || category.children || [];
+    return subs.map((sub) => ({
+      id: sub.id,
+      name: sub.name,
+      category_id: sub.category_id || category.id,
+      color: sub.color,
+    }));
+  }),
+);
 
 // 格式化时间显示
 const startTimeDisplay = computed(() => {
-  if (!focusStartTime.value) return "--";
-  return new Date(focusStartTime.value).toLocaleTimeString("zh-CN", {
+  if (!sessionStartTime.value) return "--";
+  return new Date(sessionStartTime.value).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
   });
 });
 
 const endTimeDisplay = computed(() => {
-  if (!endTime.value) return "--";
-  return new Date(endTime.value).toLocaleTimeString("zh-CN", {
+  if (!sessionEndTime.value) return "--";
+  return new Date(sessionEndTime.value).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -271,66 +280,29 @@ const activeStageLabel = computed(
   () => stageStore.activeStage?.name || "未选择阶段",
 );
 
+const syncSharedData = async () => {
+  await stageStore.fetchStages();
+
+  if (!stageStore.activeStage) {
+    ElMessage.warning("请先在学习阶段中创建并启用当前阶段");
+    return false;
+  }
+
+  await categoryStore.fetchCategories();
+  return true;
+};
+
 // 加载数据
 const loadData = async () => {
   try {
     console.log("开始加载数据...");
-
-    // 加载学习阶段
-    await stageStore.fetchStages();
+    const ready = await syncSharedData();
     console.log("当前激活阶段:", stageStore.activeStage);
-
-    // 检查是否有激活的阶段
-    if (!stageStore.activeStage) {
-      ElMessage.warning("请先在学习阶段中创建并启用当前阶段");
-      return;
-    }
-
-    // 加载分类数据（用于获取子分类）
-    await categoryStore.fetchCategories();
     console.log("categoryStore.tree:", categoryStore.tree);
-    categories.value = categoryStore.tree;
-    console.log("categories.value:", categories.value);
-
-    // 加载所有子分类
-    await loadSubcategories();
+    if (!ready) return;
   } catch (error) {
     console.error("加载数据失败:", error);
     ElMessage.error("加载数据失败");
-  }
-};
-
-// 加载所有子分类
-const loadSubcategories = async () => {
-  try {
-    console.log("开始加载子分类...");
-    console.log("categories.value:", categories.value);
-
-    // 从已加载的分类数据中提取所有子分类
-    const subcategories = [];
-    categories.value.forEach((category) => {
-      console.log(`处理分类 ${category.name} (id: ${category.id})`);
-
-      // 处理 subcategories 或 children 字段
-      const subs = category.subcategories || category.children || [];
-      console.log(`  子分类数量: ${subs.length}`, subs);
-
-      if (subs.length > 0) {
-        subs.forEach((sub) => {
-          subcategories.push({
-            id: sub.id,
-            name: sub.name,
-            category_id: category.id, // 使用父分类的ID作为category_id
-          });
-        });
-      }
-    });
-
-    allSubcategories.value = subcategories;
-    console.log("所有子分类:", allSubcategories.value);
-  } catch (error) {
-    console.error("加载子分类失败:", error);
-    ElMessage.warning("加载子分类失败，但不影响其他功能");
   }
 };
 
@@ -364,7 +336,6 @@ const resumeTimer = () => {
 
 // 显示停止确认弹窗
 const showStopDialog = () => {
-  endTime.value = new Date();
   timerStop();
   stopDialogVisible.value = true;
 };
@@ -410,8 +381,6 @@ const saveRecord = async () => {
       mood: 3,
       notes: "",
     };
-    focusStartTime.value = null;
-    endTime.value = null;
     clearState();
 
     ElMessage.success("专注记录已保存！");
@@ -501,9 +470,10 @@ onMounted(async () => {
 });
 
 onActivated(() => {
-  // 每次进入页面时重置加载状态和弹窗，防止因 keep-alive 导致的卡死
+  // 每次进入页面时重置临时 UI 状态，并同步共享数据
   loading.value = false;
   stopDialogVisible.value = false;
+  void syncSharedData();
 });
 </script>
 
