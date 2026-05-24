@@ -580,19 +580,37 @@
 
 .stage-select.minimal-select {
   height: 38px;
-  border: none;
   border-radius: 10px;
-  padding: 0 12px;
-  font-size: 14px;
-  color: var(--color-text-base);
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.2s ease;
   min-width: 160px;
-  font-weight: 600;
 
-  &:hover {
-    background: var(--color-bg-hover);
+  :deep(.el-select__wrapper) {
+    min-height: 38px;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 0 12px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transition: all 0.2s ease;
+  }
+
+  :deep(.el-select__wrapper:hover) {
+    background: var(--color-bg-hover) !important;
+  }
+
+  :deep(.el-select__wrapper.is-focused) {
+    background: var(--color-bg-hover) !important;
+    box-shadow: none !important;
+  }
+
+  :deep(.el-select__selected-item),
+  :deep(.el-select__placeholder) {
+    color: var(--color-text-base) !important;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  :deep(.el-select__caret) {
+    color: var(--color-text-secondary);
   }
 
   &:focus {

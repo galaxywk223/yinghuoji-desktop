@@ -179,16 +179,57 @@
 }
 
 .el-popper.is-light,
-.el-select-dropdown {
+.el-select-dropdown,
+.el-dropdown__popper .el-dropdown-menu,
+.el-picker__popper .el-picker-panel {
   border-radius: var(--radius-lg) !important;
   border: 1px solid var(--border-subtle) !important;
   background: var(--bg-elevated) !important;
   box-shadow: var(--shadow-3) !important;
+  color: var(--text-primary) !important;
+}
+
+.el-select-dropdown__item,
+.el-dropdown-menu__item,
+.el-picker-panel,
+.el-picker-panel__body,
+.el-picker-panel__content,
+.el-date-table th,
+.el-date-table td,
+.el-month-table td,
+.el-year-table td {
+  color: var(--text-primary) !important;
+}
+
+.el-select-dropdown__item:not(.is-disabled):hover,
+.el-select-dropdown__item.is-hovering,
+.el-dropdown-menu__item:not(.is-disabled):hover,
+.el-date-table td.available:hover,
+.el-month-table td .cell:hover,
+.el-year-table td .cell:hover {
+  background: var(--bg-muted) !important;
+  color: var(--text-primary) !important;
 }
 
 .el-select-dropdown__item.is-selected {
   background: var(--brand-primary-soft) !important;
   color: var(--brand-primary-strong) !important;
+}
+
+.el-select-dropdown__item.is-disabled,
+.el-dropdown-menu__item.is-disabled,
+.el-date-table td.disabled,
+.el-month-table td.disabled,
+.el-year-table td.disabled {
+  color: var(--text-muted) !important;
+  opacity: 0.56;
+}
+
+.el-date-table td.current:not(.disabled) .el-date-table-cell__text,
+.el-month-table td.current:not(.disabled) .cell,
+.el-year-table td.current:not(.disabled) .cell {
+  background: var(--brand-primary) !important;
+  color: var(--text-inverse) !important;
 }
 
 .el-skeleton {

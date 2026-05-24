@@ -94,17 +94,21 @@
                   </button>
                 </div>
                 <div class="filter-inputs">
-                  <select
+                  <el-select
                     v-if="rangeMode === 'stage'"
                     v-model="stageSelected"
                     class="stage-select minimal-select"
+                    placeholder="选择阶段"
                     @change="onStageChange"
                   >
-                    <option value="all">全部历史</option>
-                    <option v-for="s in charts.stages" :key="s.id" :value="s.id">
-                      {{ s.name }}
-                    </option>
-                  </select>
+                    <el-option label="全部历史" value="all" />
+                    <el-option
+                      v-for="s in charts.stages"
+                      :key="s.id"
+                      :label="s.name"
+                      :value="s.id"
+                    />
+                  </el-select>
                   <el-date-picker
                     v-else-if="rangeMode === 'daily'"
                     v-model="datePoint"
