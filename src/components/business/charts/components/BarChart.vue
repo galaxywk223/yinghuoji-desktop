@@ -18,7 +18,10 @@
         @mouseleave="emitLeave"
       >
         <div class="bar-info">
-          <span class="bar-name">{{ item.name }}</span>
+          <span class="bar-label">
+            <span class="bar-rank">{{ item.rank }}</span>
+            <span class="bar-name">{{ item.name }}</span>
+          </span>
           <span class="bar-value"
             >{{ formatValue(item.value) }}{{ unitSuffix }}</span
           >
@@ -119,6 +122,7 @@ const displayItems = computed(() => {
     );
     return {
       ...item,
+      rank: formatRank(idx + 1),
       color: barColors.value[idx % barColors.value.length],
       percent: Number(percent.toFixed(2)),
     };
@@ -126,6 +130,7 @@ const displayItems = computed(() => {
 });
 
 const formatValue = (val) => Number(val ?? 0).toFixed(1);
+const formatRank = (rank) => (rank < 10 ? `0${rank}` : String(rank));
 
 const emitClick = (name) => {
   if (typeof name === "string" && name.trim()) emit("bar-click", name);
@@ -223,13 +228,32 @@ const emitLeave = () => emit("bar-leave");
   gap: 10px;
 }
 
+.bar-label {
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bar-rank {
+  width: 28px;
+  flex: 0 0 28px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 .bar-name {
-  font-weight: 600;
-  color: var(--color-text-base);
-  font-size: 14px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--color-text-base);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .bar-value {
