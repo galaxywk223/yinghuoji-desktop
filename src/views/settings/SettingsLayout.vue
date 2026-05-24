@@ -26,6 +26,10 @@
               <Icon icon="lucide:message-square-quote" />
               <span>每日一句</span>
             </router-link>
+            <router-link to="/settings/focus" class="settings-nav-item">
+              <Icon icon="lucide:timer-reset" />
+              <span>专注偏好</span>
+            </router-link>
             <router-link to="/settings/about" class="settings-nav-item">
               <Icon icon="lucide:info" />
               <span>关于与更新</span>

@@ -108,6 +108,12 @@ const routes: RouteRecordRaw[] = [
             meta: { title: "每日一句" },
           },
           {
+            path: "focus",
+            name: "SettingsFocusPreferences",
+            component: () => import("@/views/settings/FocusPreferences.vue"),
+            meta: { title: "专注偏好" },
+          },
+          {
             path: "about",
             name: "SettingsAboutUpdate",
             component: () => import("@/views/settings/AboutUpdate.vue"),

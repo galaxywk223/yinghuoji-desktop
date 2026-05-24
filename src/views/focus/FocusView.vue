@@ -162,9 +162,10 @@ import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useCategoryStore } from "@/stores/category";
 import { useStageStore } from "@/stores/modules/stage";
+import { useSettingsStore } from "@/stores/modules/settings";
 import { recordApi } from "@/api/modules/records";
 import { useFocusTimer } from "@/composables/useFocusTimer";
-import dayjs from "dayjs";
+import { getFocusLogDate } from "@/utils/focusLearningDay";
 
 // 组件导入
 import FocusTimer from "@/components/business/focus/FocusTimer.vue";
@@ -176,6 +177,7 @@ import PageContainer from "@/components/layout/PageContainer.vue";
 const router = useRouter();
 const categoryStore = useCategoryStore();
 const stageStore = useStageStore();
+const settingsStore = useSettingsStore();
 
 // 使用计时器 composable
 const {
@@ -357,6 +359,10 @@ const saveRecord = async () => {
 
     // 格式化时间段
     const timeSlot = `${startTimeDisplay.value}-${endTimeDisplay.value}`;
+    const logDate = getFocusLogDate(
+      sessionEndTime.value ?? new Date(),
+      settingsStore.focusDayBoundaryHour,
+    );
 
     // 保存学习记录
     const recordData = {
@@ -364,7 +370,7 @@ const saveRecord = async () => {
       task: focusForm.value.name,
       subcategory_id: focusForm.value.subcategoryId,
       actual_duration: durationMinutes,
-      log_date: dayjs().format("YYYY-MM-DD"),
+      log_date: logDate,
       time_slot: timeSlot,
       mood: stopForm.value.mood,
       notes: stopForm.value.notes || "",
