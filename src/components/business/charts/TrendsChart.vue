@@ -227,6 +227,16 @@ const durationSeriesLabel = computed(() =>
   currentView.value === "weekly" ? "平均学习时长" : "学习时长",
 );
 
+const ongoingDurationTooltipLabel = computed(() =>
+  currentView.value === "weekly"
+    ? "截至昨日平均学习时长"
+    : `当前${durationSeriesLabel.value}`,
+);
+
+const ongoingEfficiencyTooltipLabel = computed(() =>
+  currentView.value === "weekly" ? "截至昨日学习效率" : "当前学习效率",
+);
+
 const currentForecasts = computed(() => {
   const isWeekly = currentView.value === "weekly";
   return {
@@ -692,13 +702,15 @@ const chartOption = computed(() => {
         if (resolvedDurationActual != null) {
           const label =
             durationLiveValue != null
-              ? `当前${durationSeriesLabel.value}`
+              ? ongoingDurationTooltipLabel.value
               : durationSeriesLabel.value;
           content += renderTooltipRow(colors.duration.line, label, resolvedDurationActual);
         }
         if (resolvedEfficiencyActual != null) {
           const label =
-            efficiencyLiveValue != null ? "当前学习效率" : "学习效率";
+            efficiencyLiveValue != null
+              ? ongoingEfficiencyTooltipLabel.value
+              : "学习效率";
           content += renderTooltipRow(
             colors.efficiency.line,
             label,

@@ -302,6 +302,19 @@ pub fn get_custom_week_window(
     (week_start, week_end, week_start.year(), week_num)
 }
 
+pub fn completed_week_window(
+    week_start: NaiveDate,
+    week_end: NaiveDate,
+    stage_start: NaiveDate,
+    stage_end: NaiveDate,
+    today: NaiveDate,
+) -> Option<(NaiveDate, NaiveDate)> {
+    let effective_start = week_start.max(stage_start);
+    let completed_cutoff = today.checked_sub_signed(Duration::days(1))?;
+    let effective_end = week_end.min(stage_end).min(completed_cutoff);
+    (effective_start <= effective_end).then_some((effective_start, effective_end))
+}
+
 pub fn ensure_log_stage_consistency(conn: &Connection) -> Result<()> {
     let mut stages_stmt =
         conn.prepare("SELECT id, start_date FROM stage ORDER BY start_date DESC")?;
@@ -393,20 +406,12 @@ pub fn recalculate_efficiency_for_stage(conn: &Connection, stage_id: i64) -> Res
     }
 
     for (year, week_num, week_start, week_end) in seen_weeks {
-        let effective_start = if week_start < stage_start {
-            stage_start
-        } else {
-            week_start
-        };
         let today = Local::now().date_naive();
-        let mut effective_end = if week_end > stage_end {
-            stage_end
-        } else {
-            week_end
+        let Some((effective_start, effective_end)) =
+            completed_week_window(week_start, week_end, stage_start, stage_end, today)
+        else {
+            continue;
         };
-        if effective_end > today {
-            effective_end = today;
-        }
         let days_in_week = (effective_end - effective_start).num_days() + 1;
         let mut total_score = 0.0_f64;
         for day_offset in 0..days_in_week {
@@ -454,22 +459,15 @@ pub fn update_efficiency_for_date(
         .map(|d| d - Duration::days(1))
         .unwrap_or_else(|| Local::now().date_naive());
     let (week_start, week_end, year, week_num) = get_custom_week_window(log_date, stage_start);
-    let effective_start = if week_start < stage_start {
-        stage_start
-    } else {
-        week_start
-    };
-    let effective_end = {
-        let mut end = if week_end > stage_end {
-            stage_end
-        } else {
-            week_end
-        };
-        let today = Local::now().date_naive();
-        if end > today {
-            end = today;
-        }
-        end
+    let today = Local::now().date_naive();
+    let Some((effective_start, effective_end)) =
+        completed_week_window(week_start, week_end, stage_start, stage_end, today)
+    else {
+        conn.execute(
+            "DELETE FROM weekly_data WHERE year = ?1 AND week_num = ?2 AND stage_id = ?3",
+            params![year, week_num, stage_id],
+        )?;
+        return Ok(());
     };
     let days_in_week = (effective_end - effective_start).num_days() + 1;
     let mut total_score = 0.0_f64;

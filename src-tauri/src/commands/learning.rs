@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use chrono::{Datelike, Duration, Local, NaiveDate};
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use serde_json::{json, Value};
 use tauri::State;
 
@@ -329,30 +329,35 @@ pub fn records_structured(
     let ids = stmt
         .query_map(params![query.stage_id], |row| row.get::<_, i64>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut grouped: BTreeMap<(i32, i32), BTreeMap<String, Vec<Value>>> = BTreeMap::new();
+    let mut grouped: BTreeMap<(i32, i32), (NaiveDate, NaiveDate, BTreeMap<String, Vec<Value>>)> =
+        BTreeMap::new();
     for id in ids {
         if let Some(record) = record_json_by_id(&conn, id)? {
             let log_date = db::parse_date(record["log_date"].as_str().unwrap_or(""))?;
-            let (_, _, year, week_num) = db::get_custom_week_window(log_date, stage_start);
+            let (week_start, week_end, year, week_num) =
+                db::get_custom_week_window(log_date, stage_start);
             grouped
                 .entry((year, week_num))
-                .or_default()
+                .or_insert_with(|| (week_start, week_end, BTreeMap::new()))
+                .2
                 .entry(record["log_date"].as_str().unwrap_or("").to_string())
                 .or_default()
                 .push(record);
         }
     }
     let desc = query.sort.unwrap_or_else(|| "desc".to_string()) == "desc";
+    let today = Local::now().date_naive();
     let mut weeks = grouped
         .into_iter()
-        .map(|((year, week_num), days)| {
-            let efficiency: f64 = conn
-                .query_row(
-                    "SELECT COALESCE(efficiency, 0) FROM weekly_data WHERE year = ?1 AND week_num = ?2 AND stage_id = ?3",
-                    params![year, week_num, query.stage_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0.0);
+        .map(|((year, week_num), (week_start, week_end, days))| {
+            let efficiency = calculate_completed_week_efficiency(
+                &conn,
+                query.stage_id,
+                week_start,
+                week_end,
+                stage_start,
+                today,
+            )?;
             let mut day_items = days
                 .into_iter()
                 .map(|(date, logs)| {
@@ -378,14 +383,14 @@ pub fn records_structured(
             if desc {
                 day_items.reverse();
             }
-            json!({
+            Ok(json!({
                 "year": year,
                 "week_num": week_num,
                 "efficiency": efficiency,
                 "days": day_items
-            })
+            }))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     if desc {
         weeks.reverse();
     }
@@ -1052,7 +1057,185 @@ fn is_incomplete_daily_bucket(bucket_date: NaiveDate, today: NaiveDate) -> bool 
 }
 
 fn is_incomplete_weekly_bucket(bucket_start: NaiveDate, bucket_end: NaiveDate, today: NaiveDate) -> bool {
-    bucket_start <= today && today <= bucket_end && today < bucket_end
+    bucket_start <= today && today <= bucket_end
+}
+
+fn completed_days_in_week(
+    week_start: NaiveDate,
+    week_end: NaiveDate,
+    stage_start: NaiveDate,
+    stage_end: NaiveDate,
+    today: NaiveDate,
+) -> Option<i64> {
+    db::completed_week_window(week_start, week_end, stage_start, stage_end, today)
+        .map(|(start, end)| (end - start).num_days() + 1)
+}
+
+fn round_two(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
+}
+
+fn calculate_completed_week_efficiency(
+    conn: &rusqlite::Connection,
+    stage_id: i64,
+    week_start: NaiveDate,
+    week_end: NaiveDate,
+    stage_start: NaiveDate,
+    today: NaiveDate,
+) -> Result<Option<f64>> {
+    let next_stage = db::next_stage_start(conn, stage_id)?;
+    let stage_end = next_stage
+        .map(|day| day - Duration::days(1))
+        .unwrap_or(today);
+    let Some((effective_start, effective_end)) =
+        db::completed_week_window(week_start, week_end, stage_start, stage_end, today)
+    else {
+        return Ok(None);
+    };
+
+    let mut total_score = 0.0_f64;
+    let days_in_week = (effective_end - effective_start).num_days() + 1;
+    for offset in 0..days_in_week {
+        let day = effective_start + Duration::days(offset);
+        let key = day.format("%Y-%m-%d").to_string();
+        let value: Option<f64> = conn
+            .query_row(
+                "SELECT efficiency FROM daily_data WHERE stage_id = ?1 AND log_date = ?2",
+                params![stage_id, key],
+                |row| row.get(0),
+            )
+            .optional()?;
+        total_score += value.unwrap_or(0.0);
+    }
+
+    Ok(Some(round_two(total_score / days_in_week as f64)))
+}
+
+struct WeeklySeries {
+    labels: Vec<String>,
+    duration_actuals: Vec<f64>,
+    duration_totals: Vec<f64>,
+    efficiency_actuals: Vec<f64>,
+    stage_features: Vec<Vec<f64>>,
+    ongoing: bool,
+    ongoing_label: Option<String>,
+    has_ongoing_actual: bool,
+}
+
+fn build_weekly_series(
+    date_range: &[NaiveDate],
+    daily_duration_actuals: &[f64],
+    daily_efficiency_optional: &[Option<f64>],
+    daily_stage_features: &[Vec<f64>],
+    log_dates: &[NaiveDate],
+    global_start_date: NaiveDate,
+    today: NaiveDate,
+) -> WeeklySeries {
+    #[derive(Default)]
+    struct WeeklyAgg {
+        duration_hours_total: f64,
+        efficiency_total: f64,
+        days: usize,
+        stage_rows: Vec<Vec<f64>>,
+        anchor_day: Option<NaiveDate>,
+    }
+
+    let mut weekly_map = BTreeMap::<(i32, i32), WeeklyAgg>::new();
+    let (current_week_start, current_week_end, current_week_year, current_week_num) =
+        db::get_custom_week_window(today, global_start_date);
+    let current_week_has_records = log_dates
+        .iter()
+        .any(|day| current_week_start <= *day && *day <= current_week_end);
+    let weekly_ongoing = current_week_has_records
+        && is_incomplete_weekly_bucket(current_week_start, current_week_end, today);
+    let weekly_ongoing_label =
+        weekly_ongoing.then(|| format!("{current_week_year}-W{current_week_num:02}"));
+
+    for (index, day) in date_range.iter().enumerate() {
+        let (week_start, week_end, year, week_num) =
+            db::get_custom_week_window(*day, global_start_date);
+        if is_incomplete_weekly_bucket(week_start, week_end, today) && *day >= today {
+            continue;
+        }
+        let entry = weekly_map.entry((year, week_num)).or_default();
+        entry.duration_hours_total += daily_duration_actuals.get(index).copied().unwrap_or(0.0);
+        entry.efficiency_total += daily_efficiency_optional
+            .get(index)
+            .and_then(|value| *value)
+            .unwrap_or(0.0);
+        entry.days += 1;
+        entry
+            .stage_rows
+            .push(daily_stage_features.get(index).cloned().unwrap_or_default());
+        if entry.anchor_day.is_none() {
+            entry.anchor_day = Some(*day);
+        }
+    }
+
+    let mut weekly_labels = Vec::new();
+    let mut weekly_duration_actuals = Vec::new();
+    let mut weekly_duration_totals = Vec::new();
+    let mut weekly_efficiency_actuals = Vec::new();
+    let mut weekly_stage_features = Vec::new();
+    for ((year, week_num), agg) in &weekly_map {
+        let anchor = agg
+            .anchor_day
+            .or_else(|| date_range.last().copied())
+            .unwrap_or(global_start_date);
+        let bucket_start = week_start(anchor);
+        let bucket_end = bucket_start + Duration::days(6);
+        let elapsed_days = completed_days_in_week(
+            bucket_start,
+            bucket_end,
+            global_start_date,
+            today,
+            today,
+        )
+        .unwrap_or(agg.days as i64)
+        .min(agg.days as i64)
+        .clamp(1, 7) as f64;
+        weekly_labels.push(format!("{year}-W{week_num:02}"));
+        weekly_duration_actuals.push(round_two(agg.duration_hours_total / elapsed_days));
+        weekly_duration_totals.push(round_two(agg.duration_hours_total));
+        weekly_efficiency_actuals.push(round_two(agg.efficiency_total / elapsed_days));
+        let avg_stage_age_days = agg
+            .stage_rows
+            .iter()
+            .map(|row| row.first().copied().unwrap_or(0.0))
+            .sum::<f64>()
+            / agg.stage_rows.len().max(1) as f64;
+        let avg_stage_index = agg
+            .stage_rows
+            .iter()
+            .map(|row| row.get(1).copied().unwrap_or(0.0))
+            .sum::<f64>()
+            / agg.stage_rows.len().max(1) as f64;
+        let stage_reset_flag = agg
+            .stage_rows
+            .iter()
+            .map(|row| row.get(2).copied().unwrap_or(0.0))
+            .fold(0.0, f64::max);
+        weekly_stage_features.push(vec![
+            round_two(avg_stage_age_days / 7.0),
+            (avg_stage_index * 10000.0).round() / 10000.0,
+            stage_reset_flag,
+        ]);
+    }
+
+    let has_ongoing_actual = weekly_ongoing_label
+        .as_ref()
+        .is_some_and(|label| weekly_labels.last() == Some(label));
+
+    WeeklySeries {
+        labels: weekly_labels,
+        duration_actuals: weekly_duration_actuals,
+        duration_totals: weekly_duration_totals,
+        efficiency_actuals: weekly_efficiency_actuals,
+        stage_features: weekly_stage_features,
+        ongoing: weekly_ongoing,
+        ongoing_label: weekly_ongoing_label,
+        has_ongoing_actual,
+    }
 }
 
 fn resolve_stage_snapshot(stages: &[(i64, String, NaiveDate)], target_date: NaiveDate) -> Vec<f64> {
@@ -1203,70 +1386,23 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
         .map(|offset| resolve_stage_snapshot(&stages, daily_future_start + Duration::days(offset as i64)))
         .collect::<Vec<_>>();
 
-    #[derive(Default)]
-    struct WeeklyAgg {
-        duration_hours_total: f64,
-        efficiency_total: f64,
-        days: usize,
-        stage_rows: Vec<Vec<f64>>,
-        anchor_day: Option<NaiveDate>,
-    }
-
-    let mut weekly_map = BTreeMap::<(i32, i32), WeeklyAgg>::new();
-    for (index, day) in date_range.iter().enumerate() {
-        let (_, _, year, week_num) = db::get_custom_week_window(*day, global_start_date);
-        let entry = weekly_map.entry((year, week_num)).or_default();
-        entry.duration_hours_total += daily_duration_actuals.get(index).copied().unwrap_or(0.0);
-        entry.efficiency_total += daily_efficiency_optional.get(index).and_then(|value| *value).unwrap_or(0.0);
-        entry.days += 1;
-        entry.stage_rows.push(daily_stage_features.get(index).cloned().unwrap_or_default());
-        if entry.anchor_day.is_none() {
-            entry.anchor_day = Some(*day);
-        }
-    }
-
-    let mut weekly_labels = Vec::new();
-    let mut weekly_duration_actuals = Vec::new();
-    let mut weekly_duration_totals = Vec::new();
-    let mut weekly_efficiency_actuals = Vec::new();
-    let mut weekly_stage_features = Vec::new();
-    let mut weekly_anchor_days = Vec::new();
-    for ((year, week_num), agg) in &weekly_map {
-        let anchor = agg.anchor_day.unwrap_or(last_log_date);
-        let bucket_start = week_start(anchor);
-        let bucket_end = bucket_start + Duration::days(6);
-        let elapsed_days = if is_incomplete_weekly_bucket(bucket_start, bucket_end, today) {
-            (today - bucket_start).num_days() + 1
-        } else {
-            agg.days as i64
-        }
-        .clamp(1, 7) as f64;
-        weekly_labels.push(format!("{year}-W{week_num:02}"));
-        weekly_duration_actuals.push((agg.duration_hours_total / elapsed_days * 100.0).round() / 100.0);
-        weekly_duration_totals.push((agg.duration_hours_total * 100.0).round() / 100.0);
-        weekly_efficiency_actuals.push((agg.efficiency_total / elapsed_days * 100.0).round() / 100.0);
-        let avg_stage_age_days = agg.stage_rows.iter().map(|row| row.first().copied().unwrap_or(0.0)).sum::<f64>()
-            / agg.stage_rows.len().max(1) as f64;
-        let avg_stage_index = agg.stage_rows.iter().map(|row| row.get(1).copied().unwrap_or(0.0)).sum::<f64>()
-            / agg.stage_rows.len().max(1) as f64;
-        let stage_reset_flag = agg.stage_rows.iter().map(|row| row.get(2).copied().unwrap_or(0.0)).fold(0.0, f64::max);
-        weekly_stage_features.push(vec![
-            ((avg_stage_age_days / 7.0) * 100.0).round() / 100.0,
-            (avg_stage_index * 10000.0).round() / 10000.0,
-            stage_reset_flag,
-        ]);
-        weekly_anchor_days.push(anchor);
-    }
-
-    let weekly_incomplete = weekly_anchor_days
-        .last()
-        .copied()
-        .map(|anchor| is_incomplete_weekly_bucket(week_start(anchor), week_start(anchor) + Duration::days(6), today))
-        .unwrap_or(false);
-    let weekly_train_len = if weekly_incomplete {
-        weekly_labels.len().saturating_sub(1)
+    let parsed_log_dates = log_dates
+        .iter()
+        .filter_map(|item| db::parse_date(item).ok())
+        .collect::<Vec<_>>();
+    let weekly_series = build_weekly_series(
+        &date_range,
+        &daily_duration_actuals,
+        &daily_efficiency_optional,
+        &daily_stage_features,
+        &parsed_log_dates,
+        global_start_date,
+        today,
+    );
+    let weekly_train_len = if weekly_series.has_ongoing_actual {
+        weekly_series.labels.len().saturating_sub(1)
     } else {
-        weekly_labels.len()
+        weekly_series.labels.len()
     };
     // Keep weekly future features stable within the same day even when the
     // user creates the first record for the current week.
@@ -1300,7 +1436,7 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
             "avg_daily_minutes": avg_daily_minutes,
             "avg_daily_formatted": db::format_minutes(avg_daily_minutes),
             "efficiency_star": efficiency_star,
-            "weekly_trend": weekly_duration_actuals.last().copied().unwrap_or(0.0),
+            "weekly_trend": weekly_series.duration_actuals.last().copied().unwrap_or(0.0),
         }),
         stage_annotations: prepare_stage_annotations(conn)?,
         daily_duration: OverviewDataset {
@@ -1328,26 +1464,26 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
             ongoing_value: daily_incomplete.then(|| daily_efficiency_optional.last().and_then(|value| *value)).flatten(),
         },
         weekly_duration: OverviewDataset {
-            labels: weekly_labels.clone(),
-            actuals: weekly_duration_actuals.clone(),
-            training_labels: weekly_labels[..weekly_train_len].to_vec(),
-            training_actuals: weekly_duration_totals[..weekly_train_len].iter().copied().map(Some).collect(),
-            training_stage_features: weekly_stage_features[..weekly_train_len].to_vec(),
+            labels: weekly_series.labels.clone(),
+            actuals: weekly_series.duration_actuals.clone(),
+            training_labels: weekly_series.labels[..weekly_train_len].to_vec(),
+            training_actuals: weekly_series.duration_totals[..weekly_train_len].iter().copied().map(Some).collect(),
+            training_stage_features: weekly_series.stage_features[..weekly_train_len].to_vec(),
             future_stage_features: weekly_future_stage_features.clone(),
-            ongoing: weekly_incomplete,
-            ongoing_label: weekly_incomplete.then(|| weekly_labels.last().cloned()).flatten(),
-            ongoing_value: weekly_incomplete.then(|| weekly_duration_actuals.last().copied()).flatten(),
+            ongoing: weekly_series.ongoing,
+            ongoing_label: weekly_series.ongoing_label.clone(),
+            ongoing_value: weekly_series.has_ongoing_actual.then(|| weekly_series.duration_actuals.last().copied()).flatten(),
         },
         weekly_efficiency: OverviewDataset {
-            labels: weekly_labels.clone(),
-            actuals: weekly_efficiency_actuals.clone(),
-            training_labels: weekly_labels[..weekly_train_len].to_vec(),
-            training_actuals: weekly_efficiency_actuals[..weekly_train_len].iter().copied().map(Some).collect(),
-            training_stage_features: weekly_stage_features[..weekly_train_len].to_vec(),
+            labels: weekly_series.labels.clone(),
+            actuals: weekly_series.efficiency_actuals.clone(),
+            training_labels: weekly_series.labels[..weekly_train_len].to_vec(),
+            training_actuals: weekly_series.efficiency_actuals[..weekly_train_len].iter().copied().map(Some).collect(),
+            training_stage_features: weekly_series.stage_features[..weekly_train_len].to_vec(),
             future_stage_features: weekly_future_stage_features,
-            ongoing: weekly_incomplete,
-            ongoing_label: weekly_incomplete.then(|| weekly_labels.last().cloned()).flatten(),
-            ongoing_value: weekly_incomplete.then(|| weekly_efficiency_actuals.last().copied()).flatten(),
+            ongoing: weekly_series.ongoing,
+            ongoing_label: weekly_series.ongoing_label,
+            ongoing_value: weekly_series.has_ongoing_actual.then(|| weekly_series.efficiency_actuals.last().copied()).flatten(),
         },
     }))
 }
@@ -1862,5 +1998,90 @@ mod tests {
         changed.daily_duration.training_actuals[1] = Some(9.9);
 
         assert_ne!(forecast_signature(&base), forecast_signature(&changed));
+    }
+
+    #[test]
+    fn weekly_series_excludes_today_from_current_week_average() {
+        let global_start = NaiveDate::from_ymd_opt(2026, 1, 5).unwrap();
+        let yesterday = NaiveDate::from_ymd_opt(2026, 1, 6).unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 1, 7).unwrap();
+        let date_range = vec![yesterday, today];
+        let series = build_weekly_series(
+            &date_range,
+            &[2.0, 10.0],
+            &[Some(4.0), Some(20.0)],
+            &[vec![1.0, 0.0, 0.0], vec![2.0, 0.0, 0.0]],
+            &date_range,
+            global_start,
+            today,
+        );
+
+        assert_eq!(series.labels, vec!["2026-W01"]);
+        assert_eq!(series.duration_actuals, vec![2.0]);
+        assert_eq!(series.duration_totals, vec![2.0]);
+        assert_eq!(series.efficiency_actuals, vec![4.0]);
+        assert!(series.ongoing);
+        assert_eq!(series.ongoing_label.as_deref(), Some("2026-W01"));
+        assert!(series.has_ongoing_actual);
+    }
+
+    #[test]
+    fn weekly_series_omits_current_week_actual_when_only_today_has_data() {
+        let global_start = NaiveDate::from_ymd_opt(2026, 1, 5).unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 1, 7).unwrap();
+        let date_range = vec![today];
+        let series = build_weekly_series(
+            &date_range,
+            &[10.0],
+            &[Some(20.0)],
+            &[vec![2.0, 0.0, 0.0]],
+            &date_range,
+            global_start,
+            today,
+        );
+
+        assert!(series.labels.is_empty());
+        assert!(series.duration_actuals.is_empty());
+        assert!(series.efficiency_actuals.is_empty());
+        assert!(series.ongoing);
+        assert_eq!(series.ongoing_label.as_deref(), Some("2026-W01"));
+        assert!(!series.has_ongoing_actual);
+    }
+
+    #[test]
+    fn weekly_series_keeps_completed_week_average_unchanged() {
+        let global_start = NaiveDate::from_ymd_opt(2026, 1, 5).unwrap();
+        let days = (0..7)
+            .map(|offset| global_start + Duration::days(offset))
+            .collect::<Vec<_>>();
+        let today = NaiveDate::from_ymd_opt(2026, 1, 12).unwrap();
+        let series = build_weekly_series(
+            &days,
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+            &[
+                Some(2.0),
+                Some(4.0),
+                Some(6.0),
+                Some(8.0),
+                Some(10.0),
+                Some(12.0),
+                Some(14.0),
+            ],
+            &days
+                .iter()
+                .enumerate()
+                .map(|(index, _)| vec![index as f64, 0.0, 0.0])
+                .collect::<Vec<_>>(),
+            &days,
+            global_start,
+            today,
+        );
+
+        assert_eq!(series.labels, vec!["2026-W01"]);
+        assert_eq!(series.duration_actuals, vec![4.0]);
+        assert_eq!(series.duration_totals, vec![28.0]);
+        assert_eq!(series.efficiency_actuals, vec![8.0]);
+        assert!(!series.ongoing);
+        assert_eq!(series.ongoing_label, None);
     }
 }

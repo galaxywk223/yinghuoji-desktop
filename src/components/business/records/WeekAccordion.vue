@@ -27,7 +27,7 @@
             </div>
           </div>
           <span class="week-eff">
-            平均效率 {{ Number(week.efficiency).toFixed(2) }}
+            平均效率 {{ formatWeekEfficiency(week) }}
           </span>
         </div>
       </template>
@@ -92,6 +92,11 @@ const formatWeekDuration = (week) => {
   );
   if (!totalMinutes) return "0h";
   return `${(totalMinutes / 60).toFixed(totalMinutes >= 600 ? 0 : 1)}h`;
+};
+
+const formatWeekEfficiency = (week) => {
+  const value = Number(week.efficiency);
+  return Number.isFinite(value) ? value.toFixed(2) : "--";
 };
 </script>
 
