@@ -17,6 +17,9 @@ use crate::{AppResult, AppState};
 use super::common::{attachment_view_json, connection, invalid, remove_attachment_file};
 use crate::db;
 
+const PROOF_MATERIALS_DIR: &str = "milestone-proof-materials";
+const PROOF_MATERIAL_FILENAME_MAX_CHARS: usize = 128;
+
 fn guess_attachment_extension(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
         Some("jpg")
@@ -57,6 +60,80 @@ fn attachment_open_name(original_filename: &str, file_path: &str, bytes: &[u8]) 
         Some(ext) => format!("{original_filename}.{ext}"),
         None => original_filename,
     }
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
+}
+
+fn clean_filename_component(value: &str, fallback: &str, max_chars: usize) -> String {
+    let cleaned = sanitize(value.trim());
+    let cleaned = cleaned.trim_matches(|item: char| item == '.' || item.is_whitespace());
+    let resolved = if cleaned.is_empty() {
+        sanitize(fallback)
+    } else {
+        cleaned.to_string()
+    };
+    truncate_chars(&resolved, max_chars)
+}
+
+fn limit_filename_chars(file_name: &str, max_chars: usize) -> String {
+    if file_name.chars().count() <= max_chars {
+        return file_name.to_string();
+    }
+
+    let extension = Path::new(file_name)
+        .extension()
+        .and_then(|item| item.to_str())
+        .filter(|item| item.chars().count() <= 16)
+        .map(|item| format!(".{item}"))
+        .unwrap_or_default();
+    let extension_len = extension.chars().count();
+    let allowed_stem_len = max_chars.saturating_sub(extension_len).max(1);
+    let stem = Path::new(file_name)
+        .file_stem()
+        .and_then(|item| item.to_str())
+        .unwrap_or(file_name);
+
+    format!(
+        "{}{}",
+        truncate_chars(stem, allowed_stem_len),
+        extension
+    )
+}
+
+fn proof_material_filename(
+    event_date: &str,
+    category_name: &str,
+    title: &str,
+    attachment_id: i64,
+    original_open_name: &str,
+) -> String {
+    let date = clean_filename_component(event_date, "未设置日期", 10);
+    let category = clean_filename_component(category_name, "未分类", 24);
+    let title = clean_filename_component(title, "未命名成就", 56);
+    let original = clean_filename_component(original_open_name, "附件", 64);
+    let original_path = Path::new(&original);
+    let original_extension = original_path
+        .extension()
+        .and_then(|item| item.to_str())
+        .filter(|item| item.chars().count() <= 16)
+        .map(|item| format!(".{item}"))
+        .unwrap_or_default();
+    let original_stem = original_path
+        .file_stem()
+        .and_then(|item| item.to_str())
+        .unwrap_or(&original);
+    let original_name = format!(
+        "{}{}",
+        clean_filename_component(original_stem, "附件", 48),
+        original_extension
+    );
+    let file_name = sanitize(format!(
+        "{date}_{category}_{title}_{attachment_id}_{original_name}"
+    ));
+
+    limit_filename_chars(&file_name, PROOF_MATERIAL_FILENAME_MAX_CHARS)
 }
 
 #[tauri::command]
@@ -629,4 +706,126 @@ pub fn milestone_attachment_open(
         .map_err(|e| invalid(&e.to_string()))?;
 
     Ok(json!({ "success": true }))
+}
+
+#[tauri::command]
+pub fn milestone_proof_materials_open(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<Value> {
+    let conn = connection(&state)?;
+    let proof_dir = state.exports_dir.join(PROOF_MATERIALS_DIR);
+    if proof_dir.exists() {
+        fs::remove_dir_all(&proof_dir)?;
+    }
+    fs::create_dir_all(&proof_dir)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT
+            a.id,
+            a.file_path,
+            a.original_filename,
+            m.title,
+            m.event_date,
+            COALESCE(c.name, '未分类')
+         FROM milestone_attachment a
+         JOIN milestone m ON m.id = a.milestone_id
+         LEFT JOIN milestone_category c ON c.id = m.category_id
+         ORDER BY date(m.event_date) DESC, a.id ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, String>(5)?,
+        ))
+    })?;
+
+    let mut total_count = 0_i64;
+    let mut copied_count = 0_i64;
+    let mut missing_count = 0_i64;
+
+    for row in rows {
+        let (attachment_id, file_path, original_filename, title, event_date, category_name) = row?;
+        total_count += 1;
+        let source_path = state.attachments_dir.join(&file_path);
+        if !source_path.exists() {
+            missing_count += 1;
+            continue;
+        }
+
+        let bytes = fs::read(&source_path)?;
+        let open_name = attachment_open_name(&original_filename, &file_path, &bytes);
+        let proof_name = proof_material_filename(
+            &event_date,
+            &category_name,
+            &title,
+            attachment_id,
+            &open_name,
+        );
+        fs::write(proof_dir.join(proof_name), bytes)?;
+        copied_count += 1;
+    }
+
+    app.opener()
+        .open_path(proof_dir.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| invalid(&e.to_string()))?;
+
+    Ok(json!({
+        "success": true,
+        "message": "证明材料目录已打开",
+        "directory": proof_dir.to_string_lossy().to_string(),
+        "total_count": total_count,
+        "copied_count": copied_count,
+        "missing_count": missing_count
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proof_material_filename_keeps_chinese_context_and_extension() {
+        let file_name = proof_material_filename(
+            "2025-08-07",
+            "竞赛",
+            "第六届华数杯全国大学生数学建模竞赛二等奖",
+            28,
+            "certificate.pdf",
+        );
+
+        assert!(file_name.contains("2025-08-07"));
+        assert!(file_name.contains("竞赛"));
+        assert!(file_name.contains("28"));
+        assert!(file_name.ends_with(".pdf"));
+    }
+
+    #[test]
+    fn proof_material_filename_uses_fallbacks_for_empty_parts() {
+        let file_name = proof_material_filename("", "", "", 3, "");
+
+        assert!(file_name.contains("未设置日期"));
+        assert!(file_name.contains("未分类"));
+        assert!(file_name.contains("未命名成就"));
+        assert!(file_name.contains("3"));
+    }
+
+    #[test]
+    fn proof_material_filename_limits_long_names() {
+        let long_title = "很长的成就标题".repeat(80);
+        let file_name = proof_material_filename(
+            "2025-01-01",
+            "证书",
+            &long_title,
+            12,
+            "very-long-original-name.pdf",
+        );
+
+        assert!(file_name.chars().count() <= PROOF_MATERIAL_FILENAME_MAX_CHARS);
+        assert!(file_name.ends_with(".pdf"));
+    }
 }

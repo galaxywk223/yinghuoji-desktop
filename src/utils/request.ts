@@ -314,6 +314,9 @@ async function baseRequest(config: RequestConfig) {
       const attachmentId = Number(url.split("/")[4]);
       return await invoke("milestone_attachment_open", { attachmentId });
     }
+    if (url === "/api/milestones/proof-materials/open" && method === "post") {
+      return await invoke("milestone_proof_materials_open");
+    }
     if (url.startsWith("/api/milestones/attachments/") && method === "get") {
       const filePath = decodeURIComponent(url.replace("/api/milestones/attachments/", ""));
       const result = await invoke<any>("milestone_attachment_get", { filePath });

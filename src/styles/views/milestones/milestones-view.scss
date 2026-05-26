@@ -130,6 +130,16 @@
   gap: 10px;
 }
 
+.milestones-actions-desktop .pill-btn svg,
+.milestone-fab .fab svg {
+  transition: transform 0.18s ease;
+}
+
+.milestones-actions-desktop .pill-btn:disabled svg,
+.milestone-fab .fab:disabled svg {
+  animation: milestone-spin 0.9s linear infinite;
+}
+
 .milestone-fab .fab {
   border: none;
   cursor: pointer;
@@ -137,6 +147,12 @@
   align-items: center;
   justify-content: center;
   transition: transform 0.18s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.68;
+    transform: none;
+  }
 }
 
 .milestone-fab .fab-primary {
@@ -174,6 +190,12 @@
   svg {
     width: 18px;
     height: 18px;
+  }
+}
+
+@keyframes milestone-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

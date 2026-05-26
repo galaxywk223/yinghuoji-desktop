@@ -60,6 +60,12 @@ export const milestoneAPI = {
       method: "post",
     });
   },
+  openProofMaterials() {
+    return request({
+      url: "/api/milestones/proof-materials/open",
+      method: "post",
+    });
+  },
 };
 
 // 向后兼容的具名导出

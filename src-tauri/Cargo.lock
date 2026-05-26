@@ -5832,7 +5832,7 @@ dependencies = [
 
 [[package]]
 name = "yinghuoji_desktop"
-version = "3.0.18"
+version = "3.0.19"
 dependencies = [
  "anyhow",
  "chrono",

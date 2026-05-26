@@ -7,6 +7,15 @@
   >
     <template #actions>
       <div class="milestones-actions-desktop">
+        <button
+          class="pill-btn secondary"
+          type="button"
+          :disabled="proofMaterialsOpening"
+          @click="openProofMaterials"
+        >
+          <Icon :icon="proofMaterialsOpening ? 'lucide:loader-circle' : 'lucide:folder-open'" />
+          证明材料
+        </button>
         <button class="pill-btn secondary" type="button" @click="openCategoryManager">
           <Icon icon="lucide:folder-cog" />
           管理分类
@@ -189,6 +198,14 @@
   <div class="milestone-fab">
     <button
       class="fab fab-secondary"
+      title="证明材料"
+      :disabled="proofMaterialsOpening"
+      @click="openProofMaterials"
+    >
+      <Icon :icon="proofMaterialsOpening ? 'lucide:loader-circle' : 'lucide:folder-open'" />
+    </button>
+    <button
+      class="fab fab-secondary"
       title="管理分类"
       @click="openCategoryManager"
     >
@@ -202,6 +219,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount, computed } from "vue";
+import { ElMessage } from "element-plus";
 import { Icon } from "@iconify/vue";
 import PageContainer from "@/components/layout/PageContainer.vue";
 import MilestoneForm from "@/components/milestones/MilestoneForm.vue";
@@ -224,6 +242,7 @@ const editing = ref(null);
 const loading = ref(false);
 const categoryManagerVisible = ref(false);
 const categoryCreating = ref(false);
+const proofMaterialsOpening = ref(false);
 const editingId = ref(null);
 const editName = ref("");
 const newCategory = ref({ name: "" });
@@ -325,6 +344,27 @@ function openCreate() {
 }
 function openCategoryManager() {
   categoryManagerVisible.value = true;
+}
+
+async function openProofMaterials() {
+  if (proofMaterialsOpening.value) return;
+  proofMaterialsOpening.value = true;
+  try {
+    const res = await milestoneAPI.openProofMaterials();
+    const copiedCount = Number(res?.copied_count || 0);
+    const missingCount = Number(res?.missing_count || 0);
+    if (!copiedCount) {
+      ElMessage.info("暂无证明材料");
+    } else if (missingCount > 0) {
+      ElMessage.warning(`已整理并打开证明材料，${missingCount} 个附件文件缺失`);
+    } else {
+      ElMessage.success("已整理并打开证明材料");
+    }
+  } catch (e) {
+    console.error("open proof materials failed", e);
+  } finally {
+    proofMaterialsOpening.value = false;
+  }
 }
 
 function getCountText(cat) {
