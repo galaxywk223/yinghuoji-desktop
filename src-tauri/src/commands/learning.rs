@@ -386,6 +386,8 @@ pub fn records_structured(
             Ok(json!({
                 "year": year,
                 "week_num": week_num,
+                "week_start": week_start.format("%Y-%m-%d").to_string(),
+                "week_end": week_end.format("%Y-%m-%d").to_string(),
                 "efficiency": efficiency,
                 "days": day_items
             }))

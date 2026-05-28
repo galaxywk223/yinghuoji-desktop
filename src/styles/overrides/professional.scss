@@ -263,7 +263,8 @@
 .rank-bar span,
 .bar-fill,
 .daily-progress-container .el-progress-bar__inner,
-.daily-progress-panel .el-progress-bar__inner {
+.daily-progress-panel .el-progress-bar__inner,
+.week-progress-panel .el-progress-bar__inner {
   background: var(--brand-primary) !important;
 }
 
@@ -294,13 +295,22 @@
   border-bottom: 1px solid var(--border-subtle) !important;
 }
 
-.date-badge,
-.day-log-count,
-.daily-progress-panel,
 .metric-pill {
   border-radius: var(--radius-md) !important;
   border: 1px solid var(--border-subtle) !important;
   background: var(--bg-surface) !important;
+}
+
+.date-badge,
+.daily-progress-panel,
+.week-progress-panel {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.date-badge {
+  padding: 0 !important;
 }
 
 .log-table .el-table__header th {

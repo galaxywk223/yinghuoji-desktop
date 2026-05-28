@@ -45,6 +45,7 @@
           :active-weeks="activeWeeks"
           :expanded-notes="expandedNotes"
           :color-seed="colorSeed"
+          :stage-name="currentStage?.name || ''"
           @add-record="openAddDialog"
           @toggle-notes="toggleNotes"
           @edit-record="openEditDialog"

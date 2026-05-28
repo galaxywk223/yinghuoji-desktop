@@ -10,33 +10,27 @@
               getWeekdayIcon(day.date)
             }}</span>
             <span class="date-text"
-              >{{ formatDate(day.date) }} (周{{ getWeekday(day.date) }})</span
+              >{{ formatDate(day.date) }} · 周{{ getWeekday(day.date) }}</span
             >
           </span>
-          <span class="day-log-count">{{ day.logs.length }} 条记录</span>
         </div>
 
         <div
           class="daily-progress-panel"
           :title="`今日总时长: ${day.total_duration} 分钟`"
         >
-          <div class="progress-meta">
-            <span class="progress-label">今日投入</span>
-            <strong>{{ formatHours(day.total_duration) }}</strong>
-          </div>
+          <span class="progress-label">今日投入</span>
           <el-progress
             :percentage="Math.min(100, (day.total_duration / 840) * 100)"
             :show-text="false"
             :stroke-width="8"
             :color="getProgressColor(day.total_duration)"
           />
+          <strong class="progress-hours">{{ formatHours(day.total_duration) }}</strong>
+          <span class="progress-count">{{ day.logs.length }} 条记录</span>
         </div>
 
         <div class="day-metrics">
-          <span class="metric-pill">
-            <Icon icon="lucide:clock-3" class="metric-icon" />
-            {{ formatHours(day.total_duration) }}
-          </span>
           <span class="metric-pill accent">
             <Icon icon="lucide:gauge" class="metric-icon" />
             日效率 {{ Number(day.efficiency).toFixed(2) }}
@@ -153,13 +147,12 @@ const getProgressColor = (duration) => {
   .day-card-header {
     display: grid;
     align-items: center;
-    grid-template-columns: minmax(260px, auto) minmax(240px, 1fr) auto;
+    grid-template-columns: minmax(240px, auto) minmax(300px, 1fr) auto;
     gap: 16px;
 
     .day-title-group {
       display: flex;
       align-items: center;
-      gap: 10px;
       min-width: 0;
       white-space: nowrap;
     }
@@ -172,6 +165,10 @@ const getProgressColor = (duration) => {
       align-items: center;
       gap: 8px;
       min-width: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
 
       .weekday-icon {
         font-size: 20px;
@@ -186,45 +183,43 @@ const getProgressColor = (duration) => {
       white-space: nowrap;
     }
 
-    .day-log-count {
-      width: fit-content;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--color-primary) 10%, rgba(255, 255, 255, 0.03));
-      border: 1px solid color-mix(in srgb, var(--color-primary) 10%, transparent);
-      color: var(--color-text-secondary);
-      font-size: 13px;
-      font-weight: 600;
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
-
     .daily-progress-panel {
       min-width: 0;
-      padding: 12px 14px;
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--surface-card-strong) 90%, rgba(255, 255, 255, 0.02));
-      border: 1px solid color-mix(in srgb, var(--color-primary) 8%, var(--stroke-soft));
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      display: grid;
+      grid-template-columns: max-content minmax(120px, 1fr) max-content max-content;
+      align-items: center;
+      gap: 12px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
 
-      .progress-meta {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-        gap: 12px;
+      .progress-label {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--color-text-secondary);
+        white-space: nowrap;
+      }
 
-        .progress-label {
-          font-size: 12px;
-          font-weight: 600;
-          letter-spacing: 0.04em;
-          color: var(--color-text-secondary);
-        }
+      .progress-hours {
+        font-size: 16px;
+        color: var(--color-text-heading);
+        white-space: nowrap;
+      }
 
-        strong {
-          font-size: 16px;
-          color: var(--color-text-heading);
-        }
+      .progress-count {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        white-space: nowrap;
+      }
+
+      :deep(.el-progress) {
+        min-width: 0;
+        width: 100%;
+        line-height: 0;
       }
 
       :deep(.el-progress-bar__outer) {

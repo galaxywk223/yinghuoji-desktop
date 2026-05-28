@@ -315,6 +315,60 @@ pub fn completed_week_window(
     (effective_start <= effective_end).then_some((effective_start, effective_end))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn date(year: i32, month: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(year, month, day).unwrap()
+    }
+
+    #[test]
+    fn get_custom_week_window_counts_partial_first_stage_week() {
+        let stage_start = date(2026, 5, 27);
+
+        let (week_start, week_end, year, week_num) =
+            get_custom_week_window(date(2026, 5, 27), stage_start);
+        assert_eq!(week_start, date(2026, 5, 27));
+        assert_eq!(week_end, date(2026, 5, 31));
+        assert_eq!(year, 2026);
+        assert_eq!(week_num, 1);
+
+        let (week_start, week_end, year, week_num) =
+            get_custom_week_window(date(2026, 5, 31), stage_start);
+        assert_eq!(week_start, date(2026, 5, 27));
+        assert_eq!(week_end, date(2026, 5, 31));
+        assert_eq!(year, 2026);
+        assert_eq!(week_num, 1);
+
+        let (week_start, week_end, year, week_num) =
+            get_custom_week_window(date(2026, 6, 1), stage_start);
+        assert_eq!(week_start, date(2026, 6, 1));
+        assert_eq!(week_end, date(2026, 6, 7));
+        assert_eq!(year, 2026);
+        assert_eq!(week_num, 2);
+    }
+
+    #[test]
+    fn get_custom_week_window_counts_monday_stage_start_as_full_week_one() {
+        let stage_start = date(2026, 6, 1);
+
+        let (week_start, week_end, year, week_num) =
+            get_custom_week_window(date(2026, 6, 1), stage_start);
+        assert_eq!(week_start, date(2026, 6, 1));
+        assert_eq!(week_end, date(2026, 6, 7));
+        assert_eq!(year, 2026);
+        assert_eq!(week_num, 1);
+
+        let (week_start, week_end, year, week_num) =
+            get_custom_week_window(date(2026, 6, 8), stage_start);
+        assert_eq!(week_start, date(2026, 6, 8));
+        assert_eq!(week_end, date(2026, 6, 14));
+        assert_eq!(year, 2026);
+        assert_eq!(week_num, 2);
+    }
+}
+
 pub fn ensure_log_stage_consistency(conn: &Connection) -> Result<()> {
     let mut stages_stmt =
         conn.prepare("SELECT id, start_date FROM stage ORDER BY start_date DESC")?;
