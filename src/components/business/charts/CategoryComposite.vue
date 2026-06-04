@@ -5,9 +5,12 @@
         ref="doughnutRef"
         :data="doughnutData"
         :title="currentTitle"
+        :subtitle="doughnutSubtitle"
         :total-hours="totalHours"
         :colors="chartColors"
         :metric-mode="metricMode"
+        :value-unit="valueUnit"
+        :total-label="totalLabel"
         @slice-click="handleSliceClick"
       />
 
@@ -36,10 +39,11 @@
         <div class="panel-chart">
           <BarChart
             ref="barRef"
-            :data="barData"
+            :data="barChartData"
             :title="barTitle"
             :colors="chartColors"
             :metric-mode="metricMode"
+            :value-unit="barValueUnit || valueUnit"
             @bar-click="handleSliceClick"
             @bar-hover="handleBarHover"
             @bar-leave="handleBarLeave"
@@ -73,9 +77,16 @@ import { buildColors, calculateTotalHours } from "@/utils/charts";
 
 const props = defineProps({
   main: { type: Object, default: () => ({}) },
+  barMain: { type: Object, default: null },
   drilldown: { type: Object, default: () => ({}) },
   showPanelHeader: { type: Boolean, default: true },
   metricMode: { type: String, default: "duration" }, // 'duration' | 'efficiency'
+  mainTitle: { type: String, default: "" },
+  barMainTitle: { type: String, default: "" },
+  doughnutSubtitle: { type: String, default: "" },
+  valueUnit: { type: String, default: "" },
+  barValueUnit: { type: String, default: "" },
+  totalLabel: { type: String, default: "" },
 });
 
 const emit = defineEmits(["sliceClick", "back"]);
@@ -120,14 +131,14 @@ const totalHours = computed(() => calculateTotalHours(currentData.value));
 
 const currentTitle = computed(() => {
   if (view.value === "main") {
-    return TEXT.value.mainTitle;
+    return props.mainTitle || TEXT.value.mainTitle;
   }
   return `${currentCategory.value} · ${TEXT.value.drillTitleSuffix}`;
 });
 
 const barTitle = computed(() => {
   if (view.value === "main") {
-    return TEXT.value.barMainTitle;
+    return props.barMainTitle || TEXT.value.barMainTitle;
   }
   return `${currentCategory.value} · ${TEXT.value.barDrillSuffix}`;
 });
@@ -143,6 +154,12 @@ const chartColors = computed(() => {
 
 const doughnutData = computed(() => currentData.value);
 const barData = computed(() => currentData.value);
+const barChartData = computed(() => {
+  if (view.value === "main" && props.barMain) {
+    return props.barMain;
+  }
+  return barData.value;
+});
 
 function handleSliceClick(label) {
   if (view.value !== "main") return;

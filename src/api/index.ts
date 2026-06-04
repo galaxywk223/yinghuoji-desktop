@@ -4,6 +4,7 @@
 export { authAPI } from "./modules/auth";
 export { stageAPI } from "./modules/stage";
 export { categoryAPI } from "./modules/category";
+export { courseProfileAPI } from "./modules/courseProfile";
 export { recordAPI } from "./modules/records";
 
 export { chartsAPI } from "./modules/charts";

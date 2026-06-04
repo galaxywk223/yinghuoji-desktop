@@ -48,13 +48,14 @@ const props = defineProps({
   title: { type: String, default: "High Frequency Categories" },
   colors: { type: Array, default: () => [] },
   metricMode: { type: String, default: "duration" }, // 'duration' | 'efficiency'
+  valueUnit: { type: String, default: "" },
 });
 
 const emit = defineEmits(["bar-click", "bar-hover", "bar-leave"]);
 const scrollWrapper = ref(null);
 
 const unitSuffix = computed(() =>
-  props.metricMode === "efficiency" ? "" : "h",
+  props.valueUnit || (props.metricMode === "efficiency" ? "" : "h"),
 );
 
 function scrollToTop(smooth = true) {
@@ -110,15 +111,16 @@ const barColors = computed(() => {
 });
 
 const maxValue = computed(() =>
-  Math.max(0, ...sortedData.value.map((item) => item.value)),
+  Math.max(0, ...sortedData.value.map((item) => Math.abs(item.value))),
 );
 
 const displayItems = computed(() => {
   const max = maxValue.value || 1;
   return sortedData.value.map((item, idx) => {
+    const magnitude = Math.abs(Number(item.value || 0));
     const percent = Math.max(
       0,
-      Math.min(100, (Number(item.value || 0) / max) * 100),
+      Math.min(100, (magnitude / max) * 100),
     );
     return {
       ...item,

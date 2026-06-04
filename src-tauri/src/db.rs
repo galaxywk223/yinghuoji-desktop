@@ -102,6 +102,23 @@ pub fn initialize_database(state: &AppState) -> Result<()> {
           target_datetime_utc TEXT NOT NULL,
           created_at_utc TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS course_profile (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          semester TEXT NOT NULL,
+          course_name TEXT NOT NULL,
+          credits REAL NOT NULL,
+          grade REAL,
+          grade_status TEXT NOT NULL DEFAULT 'pending',
+          match_status TEXT NOT NULL DEFAULT 'unmatched',
+          matched_subcategory_id INTEGER REFERENCES sub_category(id) ON DELETE SET NULL,
+          import_batch_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(semester, course_name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_course_profile_subcategory_semester
+          ON course_profile(matched_subcategory_id, semester)
+          WHERE matched_subcategory_id IS NOT NULL;
         CREATE TABLE IF NOT EXISTS ai_insight (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           insight_type TEXT NOT NULL,

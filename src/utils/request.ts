@@ -243,6 +243,41 @@ async function baseRequest(config: RequestConfig) {
       return await invoke("charts_overview_forecast_retrain");
     }
 
+    if (url === "/api/course-profile/settings" && method === "get") {
+      return await invoke("course_profile_settings_get");
+    }
+    if (url === "/api/course-profile/settings" && method === "post") {
+      return await invoke("course_profile_settings_set", { payload: data });
+    }
+    if (url === "/api/course-profile/import/preview" && method === "post") {
+      const payload = await formDataToFilePayload(data);
+      return await invoke("course_profile_import_preview", payload);
+    }
+    if (url === "/api/course-profile/import/confirm" && method === "post") {
+      return await invoke("course_profile_confirm_import", { payload: data });
+    }
+    if (url === "/api/course-profile/courses" && method === "get") {
+      return await invoke("course_profile_list", { query: params });
+    }
+    if (url === "/api/course-profile/template" && method === "post") {
+      return await invoke("course_profile_download_template");
+    }
+    if (/^\/api\/course-profile\/courses\/\d+$/.test(url)) {
+      const courseId = Number(url.split("/").pop());
+      if (method === "put") {
+        return await invoke("course_profile_update_course", {
+          courseId,
+          payload: data,
+        });
+      }
+      if (method === "delete") {
+        return await invoke("course_profile_delete_course", { courseId });
+      }
+    }
+    if (url === "/api/course-profile/summary" && method === "get") {
+      return await invoke("course_profile_summary", { query: params });
+    }
+
     if (url === "/api/countdowns" && method === "get") {
       return await invoke("countdowns_list");
     }

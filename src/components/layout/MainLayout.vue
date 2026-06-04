@@ -110,6 +110,7 @@ const navItems = [
   { to: "/focus", label: "专注计时", icon: "lucide:timer-reset" },
   { to: "/records", label: "学习记录", icon: "lucide:notebook-tabs" },
   { to: "/charts", label: "学习回顾", icon: "lucide:chart-column-big" },
+  { to: "/course-profile", label: "课程画像", icon: "lucide:graduation-cap" },
   { to: "/countdown", label: "倒计时", icon: "lucide:calendar-clock" },
   { to: "/milestones", label: "成就时刻", icon: "lucide:trophy" },
   { to: "/settings", label: "偏好设置", icon: "lucide:settings-2" },

@@ -9,7 +9,7 @@
         </svg>
         <div>
           <h5>{{ title }}</h5>
-          <p>{{ uiText.subtitle }}</p>
+          <p>{{ subtitle || uiText.subtitle }}</p>
         </div>
       </div>
     </header>
@@ -44,6 +44,10 @@ const props = defineProps({
     type: String,
     default: "\u5b66\u4e60\u65f6\u957f\u5360\u6bd4",
   },
+  subtitle: {
+    type: String,
+    default: "",
+  },
   totalHours: {
     type: Number,
     default: 0,
@@ -63,6 +67,14 @@ const props = defineProps({
   metricMode: {
     type: String,
     default: "duration", // 'duration' | 'efficiency'
+  },
+  valueUnit: {
+    type: String,
+    default: "",
+  },
+  totalLabel: {
+    type: String,
+    default: "",
   },
 });
 
@@ -101,10 +113,14 @@ const themeTokens = computed(() => {
 
 const uiText = computed(() => ({
   subtitle: props.metricMode === "efficiency" ? "分类效率占比" : "分类时长占比",
-  totalLabel: props.metricMode === "efficiency" ? "效率总量" : "累计",
-  hoursSuffix: props.metricMode === "efficiency" ? "" : "小时",
+  totalLabel:
+    props.totalLabel ||
+    (props.metricMode === "efficiency" ? "效率总量" : "累计"),
+  hoursSuffix:
+    props.valueUnit || (props.metricMode === "efficiency" ? "" : "小时"),
   pieName: props.metricMode === "efficiency" ? "学习效率" : "学习分类",
-  tooltipUnit: props.metricMode === "efficiency" ? "效率" : "小时",
+  tooltipUnit:
+    props.valueUnit || (props.metricMode === "efficiency" ? "效率" : "小时"),
 }));
 const baseSlices = computed(() => {
   const labels = Array.isArray(props.data?.labels) ? props.data.labels : [];

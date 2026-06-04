@@ -72,6 +72,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "学习回顾" },
       },
       {
+        path: "course-profile",
+        name: "CourseProfile",
+        component: () => import("@/views/course-profile/CourseProfileView.vue"),
+        meta: { title: "课程画像" },
+      },
+      {
         path: "settings",
         component: () => import("@/views/settings/SettingsLayout.vue"),
         redirect: "/settings/data",

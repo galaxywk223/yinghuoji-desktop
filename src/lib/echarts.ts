@@ -2,6 +2,7 @@ import { use } from "echarts/core";
 import { BarChart, LineChart, PieChart } from "echarts/charts";
 import {
   DataZoomComponent,
+  GraphicComponent,
   GridComponent,
   LegendComponent,
   MarkAreaComponent,
@@ -30,6 +31,7 @@ export function registerPieChartModules() {
     TooltipComponent,
     LegendComponent,
     ToolboxComponent,
+    GraphicComponent,
   ]);
 }
 
@@ -39,6 +41,19 @@ export function registerBarChartModules() {
     BarChart,
     GridComponent,
     TooltipComponent,
+    LegendComponent,
+    DataZoomComponent,
+  ]);
+}
+
+export function registerCourseProfileChartModules() {
+  registerChart("course-profile", [
+    CanvasRenderer,
+    BarChart,
+    PieChart,
+    GridComponent,
+    TooltipComponent,
+    LegendComponent,
     DataZoomComponent,
   ]);
 }
