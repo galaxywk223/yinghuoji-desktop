@@ -81,11 +81,11 @@ fn csv_template_value(value: &Value, key: &str) -> String {
     }
 }
 
-fn csv_template_number(value: &Value, key: &str, positive_only: bool) -> String {
+fn csv_template_number(value: &Value, key: &str, non_negative_only: bool) -> String {
     let Some(number) = value.get(key).and_then(Value::as_f64) else {
         return String::new();
     };
-    if positive_only && number <= 0.0 {
+    if non_negative_only && number < 0.0 {
         return String::new();
     }
     if number.fract() == 0.0 {
@@ -94,6 +94,13 @@ fn csv_template_number(value: &Value, key: &str, positive_only: bool) -> String 
         let text = format!("{number:.2}");
         text.trim_end_matches('0').trim_end_matches('.').to_string()
     }
+}
+
+fn csv_template_credits(value: &Value) -> String {
+    if !value["is_profile_enriched"].as_bool().unwrap_or(false) {
+        return String::new();
+    }
+    csv_template_number(value, "credits", true)
 }
 
 fn normalize_name(value: &str) -> String {
@@ -892,7 +899,7 @@ pub fn course_profile_download_template(state: State<'_, AppState>) -> AppResult
     for course in &courses {
         let semester = csv_template_value(course, "semester");
         let course_name = csv_template_value(course, "course_name");
-        let credits = csv_template_number(course, "credits", true);
+        let credits = csv_template_credits(course);
         let grade = csv_template_number(course, "grade", false);
         writer
             .write_record([semester, course_name, credits, grade])
@@ -1164,15 +1171,17 @@ fn build_course_profile_summary(courses: &[Value]) -> Value {
     let mut chart_rows = Vec::new();
     for item in courses {
         let credits = item["credits"].as_f64().unwrap_or(0.0);
-        total_credits += credits;
-        if item["grade_status"].as_str() == Some("graded") {
+        let has_saved_profile = item["is_profile_enriched"].as_bool().unwrap_or(false);
+        let has_positive_credit = has_saved_profile && credits > 0.0;
+        total_credits += if has_positive_credit { credits } else { 0.0 };
+        if has_positive_credit && item["grade_status"].as_str() == Some("graded") {
             if let Some(grade) = item["grade"].as_f64() {
                 graded_credits += credits;
                 grade_sum += grade;
                 grade_count += 1.0;
                 weighted_sum += grade * credits;
             }
-        } else {
+        } else if has_positive_credit {
             pending_credits += credits;
         }
         if item["matched_subcategory_id"].is_null() {
@@ -1218,11 +1227,19 @@ fn build_course_profile_summary(courses: &[Value]) -> Value {
     for item in courses {
         let name = item["course_name"].as_str().unwrap_or("").to_string();
         let credits = item["credits"].as_f64().unwrap_or(0.0);
+        let has_saved_profile = item["is_profile_enriched"].as_bool().unwrap_or(false);
+        let has_positive_credit = has_saved_profile && credits > 0.0;
+        let missing_profile = !has_saved_profile;
         let hours = item["learning_hours"].as_f64().unwrap_or(0.0);
         let efficiency = item["efficiency"].as_f64();
-        let grade = item["grade"].as_f64();
+        let grade = if has_positive_credit {
+            item["grade"].as_f64()
+        } else {
+            None
+        };
+        let weighted_credits = if has_positive_credit { credits } else { 0.0 };
         let credit_share = if total_credits > 0.0 {
-            credits / total_credits
+            weighted_credits / total_credits
         } else {
             0.0
         };
@@ -1255,9 +1272,10 @@ fn build_course_profile_summary(courses: &[Value]) -> Value {
             _ => None,
         };
 
-        let has_credit = credits > 0.0;
-        let duration_fit_label = if !has_credit {
+        let duration_fit_label = if missing_profile {
             "待补学分".to_string()
+        } else if !has_positive_credit {
+            "不计权重".to_string()
         } else {
             ratio_label(
                 duration_credit_ratio,
@@ -1267,8 +1285,10 @@ fn build_course_profile_summary(courses: &[Value]) -> Value {
                 "缺少学习记录",
             )
         };
-        let efficiency_fit_label = if !has_credit {
+        let efficiency_fit_label = if missing_profile {
             "待补学分".to_string()
+        } else if !has_positive_credit {
+            "不计权重".to_string()
         } else {
             ratio_label(
                 efficiency_credit_ratio,
@@ -1291,7 +1311,7 @@ fn build_course_profile_summary(courses: &[Value]) -> Value {
         if shared_mapping_count > 1 {
             data_quality_flags.push("共享映射".to_string());
         }
-        if !has_credit {
+        if missing_profile {
             data_quality_flags.push("待补学分".to_string());
         }
         if hours <= 0.0 {
@@ -1305,12 +1325,12 @@ fn build_course_profile_summary(courses: &[Value]) -> Value {
         if hours <= 0.0 {
             diagnosis_tags.push("缺少学习记录".to_string());
         }
-        if !has_credit {
+        if missing_profile {
             diagnosis_tags.push("待补学分".to_string());
         }
-        if grade.is_none() && has_credit && high_credit {
+        if grade.is_none() && has_positive_credit && high_credit {
             diagnosis_tags.push("高学分成绩待出".to_string());
-        } else if grade.is_none() {
+        } else if item["grade"].as_f64().is_none() && has_saved_profile {
             diagnosis_tags.push("成绩待观察".to_string());
         }
         if matches!(duration_credit_ratio, Some(value) if value < 0.75) && high_credit {
@@ -1357,7 +1377,7 @@ fn build_course_profile_summary(courses: &[Value]) -> Value {
             "grade_status": item["grade_status"].as_str(),
             "learning_hours": round_two(hours),
             "process_efficiency": efficiency.map(round_two),
-            "credit_share": percent_share(credits, total_credits),
+            "credit_share": percent_share(weighted_credits, total_credits),
             "duration_share": percent_share(hours, total_hours),
             "efficiency_share": percent_share(efficiency.unwrap_or(0.0).max(0.0), total_positive_efficiency),
             "expected_hours": round_two(expected_hours),
@@ -1589,6 +1609,7 @@ mod tests {
             "learning_hours": hours,
             "efficiency": efficiency,
             "matched_subcategory_id": id,
+            "is_profile_enriched": true,
             "shared_mapping_count": 0
         })
     }
@@ -1683,11 +1704,60 @@ mod tests {
         assert!(row["duration_credit_ratio"].is_null());
         assert!(row["efficiency_credit_ratio"].is_null());
         assert!(row["grade_return_index"].is_null());
-        assert_eq!(row["duration_fit_label"].as_str(), Some("待补学分"));
+        assert_eq!(row["duration_fit_label"].as_str(), Some("不计权重"));
+        assert_eq!(row["efficiency_fit_label"].as_str(), Some("不计权重"));
+        assert_eq!(summary["total_credits"].as_f64(), Some(0.0));
+        assert!(summary["average_grade"].is_null());
+        assert!(summary["weighted_grade"].is_null());
+        assert!(!row["diagnosis_tags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|tag| tag.as_str() == Some("待补学分")));
         assert!(row["diagnosis_tags"]
             .as_array()
             .unwrap()
             .iter()
             .any(|tag| tag.as_str() == Some("缺少学习记录")));
+    }
+
+    #[test]
+    fn missing_profile_placeholder_still_marks_credit_as_missing() {
+        let summary = build_course_profile_summary(&[json!({
+            "id": -1,
+            "semester": "",
+            "course_name": "未补资料课程",
+            "credits": 0.0,
+            "grade": Value::Null,
+            "grade_status": "pending",
+            "learning_hours": 2.0,
+            "efficiency": 1.0,
+            "matched_subcategory_id": 1,
+            "is_profile_enriched": false,
+            "shared_mapping_count": 0
+        })]);
+        let row = analysis_row(&summary, "未补资料课程");
+
+        assert_eq!(row["duration_fit_label"].as_str(), Some("待补学分"));
+        assert!(row["data_quality_flags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|tag| tag.as_str() == Some("待补学分")));
+    }
+
+    #[test]
+    fn csv_template_keeps_zero_credit_only_for_saved_profiles() {
+        let saved_zero_credit = json!({
+            "credits": 0.0,
+            "is_profile_enriched": true
+        });
+        let placeholder = json!({
+            "credits": 0.0,
+            "is_profile_enriched": false
+        });
+
+        assert_eq!(csv_template_credits(&saved_zero_credit), "0");
+        assert_eq!(csv_template_credits(&placeholder), "");
     }
 }

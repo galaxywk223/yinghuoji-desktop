@@ -262,7 +262,7 @@ async function baseRequest(config: RequestConfig) {
     if (url === "/api/course-profile/template" && method === "post") {
       return await invoke("course_profile_download_template");
     }
-    if (/^\/api\/course-profile\/courses\/\d+$/.test(url)) {
+    if (/^\/api\/course-profile\/courses\/-?\d+$/.test(url)) {
       const courseId = Number(url.split("/").pop());
       if (method === "put") {
         return await invoke("course_profile_update_course", {

@@ -103,6 +103,11 @@ export default defineConfig({
     warmup: {
       clientFiles: ["./src/App.vue", "./src/main.ts", "./src/router/index.ts"],
     },
+    watch: {
+      // Cargo writes and locks DLL/PDB files under src-tauri/target during tauri dev.
+      // Vite must not watch those build outputs on Windows, otherwise fs.watch can fail with EBUSY.
+      ignored: ["**/src-tauri/target/**", "**/src-tauri/gen/**"],
+    },
   },
 
   // 仅影响 dev 的依赖预构建，生产构建不依赖这里；保持精简避免误导

@@ -280,7 +280,7 @@
             <el-table-column prop="course_name" label="课程" min-width="180" />
             <el-table-column label="学分" width="90">
               <template #default="{ row }">
-                <span>{{ row.credits > 0 ? numberText(row.credits) : "待补" }}</span>
+                <span>{{ row.is_profile_enriched ? numberText(row.credits) : "待补" }}</span>
               </template>
             </el-table-column>
             <el-table-column label="成绩" width="100">
@@ -426,7 +426,7 @@
         </el-form-item>
         <div class="edit-grid">
           <el-form-item label="学分">
-            <el-input-number v-model="editingCourse.credits" :min="0.1" :step="0.5" />
+            <el-input-number v-model="editingCourse.credits" :min="0" :step="0.5" />
           </el-form-item>
           <el-form-item label="成绩">
             <el-input-number
@@ -779,7 +779,7 @@ function openEditDialog(row: CourseProfileCourse) {
   editingCourse.value = {
     ...row,
     semester: row.semester || "未设置",
-    credits: row.credits > 0 ? row.credits : 0,
+    credits: row.is_profile_enriched ? row.credits : 0,
   };
   editVisible.value = true;
 }
