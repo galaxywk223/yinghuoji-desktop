@@ -338,11 +338,36 @@ const resumeTimer = () => {
   ElMessage.success("继续专注！");
 };
 
+const formatElapsedClock = (secondsValue) => {
+  const hours = Math.floor(secondsValue / 3600);
+  const minutes = Math.floor((secondsValue % 3600) / 60);
+  const seconds = secondsValue % 60;
+
+  return hours > 0
+    ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+    : `${minutes}:${seconds.toString().padStart(2, "0")}`;
+};
+
 // 重新开始当前专注
-const restartTimer = () => {
-  stopDialogVisible.value = false;
-  timerRestart(focusForm.value);
-  ElMessage.success("已重新开始专注");
+const restartTimer = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确认重新开始当前专注？已专注 ${formatElapsedClock(elapsedSeconds.value)}，当前计时将被清零且不会保存。`,
+      "重新开始",
+      {
+        confirmButtonText: "确认重新开始",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+
+    stopDialogVisible.value = false;
+    timerRestart(focusForm.value);
+    ElMessage.success("已重新开始专注");
+  } catch (error) {
+    // 用户取消操作
+    console.log("取消重新开始");
+  }
 };
 
 // 显示停止确认弹窗
@@ -433,16 +458,8 @@ const saveRecord = async () => {
 // 放弃当前专注会话
 const cancelSession = async () => {
   try {
-    const hours = Math.floor(elapsedSeconds.value / 3600);
-    const minutes = Math.floor((elapsedSeconds.value % 3600) / 60);
-    const seconds = elapsedSeconds.value % 60;
-    const timeDisplay =
-      hours > 0
-        ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-        : `${minutes}:${seconds.toString().padStart(2, "0")}`;
-
     await ElMessageBox.confirm(
-      `确认放弃当前专注记录？已专注 ${timeDisplay}，数据将不会保存。`,
+      `确认放弃当前专注记录？已专注 ${formatElapsedClock(elapsedSeconds.value)}，数据将不会保存。`,
       "放弃记录",
       {
         confirmButtonText: "确认放弃",
