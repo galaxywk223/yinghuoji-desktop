@@ -34,6 +34,15 @@
         >
           结束专注
         </el-button>
+        <el-button
+          class="control-btn restart-btn"
+          size="large"
+          :icon="RefreshRight"
+          plain
+          @click="$emit('restart')"
+        >
+          重新开始
+        </el-button>
       </div>
     </template>
 
@@ -56,6 +65,15 @@
           结束专注
         </el-button>
         <el-button
+          class="control-btn restart-btn"
+          size="large"
+          :icon="RefreshRight"
+          plain
+          @click="$emit('restart')"
+        >
+          重新开始
+        </el-button>
+        <el-button
           class="control-btn cancel-btn"
           size="large"
           plain
@@ -69,7 +87,7 @@
 </template>
 
 <script setup>
-import { VideoPlay, VideoPause } from "@element-plus/icons-vue";
+import { RefreshRight, VideoPlay, VideoPause } from "@element-plus/icons-vue";
 
 // Props
 defineProps({
@@ -88,7 +106,15 @@ defineProps({
 });
 
 // Emits
-defineEmits(["start", "pause", "resume", "stop", "cancel", "go-back"]);
+defineEmits([
+  "start",
+  "pause",
+  "resume",
+  "stop",
+  "restart",
+  "cancel",
+  "go-back",
+]);
 </script>
 
 <style scoped lang="scss">
@@ -199,6 +225,7 @@ defineEmits(["start", "pause", "resume", "stop", "cancel", "go-back"]);
 }
 
 :deep(.secondary-btn),
+:deep(.restart-btn),
 :deep(.cancel-btn) {
   background: var(--surface-card-muted);
   color: var(--color-text-heading);

@@ -37,6 +37,7 @@ interface UseFocusTimerReturn {
   pauseTimer: (formData: FocusFormData) => void;
   resumeTimer: (formData: FocusFormData) => void;
   stopTimer: () => number;
+  restartTimer: (formData: FocusFormData) => void;
   cancelSession: () => void;
   completeSession: () => number;
   restoreState: () => FocusFormData | null;
@@ -258,6 +259,27 @@ export function useFocusTimer(): UseFocusTimerReturn {
     return finalElapsed;
   };
 
+  // 重新开始当前会话
+  const restartTimer = (formData: FocusFormData): void => {
+    const now = new Date();
+
+    stopTimerInterval();
+
+    sessionStartTime.value = now;
+    sessionEndTime.value = null;
+    pauseStartedAt.value = null;
+    currentRunStartedAt.value = now;
+    accumulatedElapsedSeconds.value = 0;
+    elapsedSeconds.value = 0;
+    isTimerRunning.value = true;
+    isPaused.value = false;
+
+    startTimerInterval();
+    saveState(formData);
+
+    console.log("重新开始专注计时:", now);
+  };
+
   // 取消会话
   const cancelSession = (): void => {
     clearState();
@@ -287,6 +309,7 @@ export function useFocusTimer(): UseFocusTimerReturn {
     pauseTimer,
     resumeTimer,
     stopTimer,
+    restartTimer,
     cancelSession,
     completeSession,
     restoreState,

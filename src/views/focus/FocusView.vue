@@ -24,6 +24,7 @@
             @pause="pauseTimer"
             @resume="resumeTimer"
             @stop="showStopDialog"
+            @restart="restartTimer"
             @cancel="cancelSession"
             @go-back="goBack"
           />
@@ -190,6 +191,7 @@ const {
   pauseTimer: timerPause,
   resumeTimer: timerResume,
   stopTimer: timerStop,
+  restartTimer: timerRestart,
   cancelSession: timerCancel,
   restoreState,
   clearState,
@@ -334,6 +336,13 @@ const pauseTimer = () => {
 const resumeTimer = () => {
   timerResume(focusForm.value);
   ElMessage.success("继续专注！");
+};
+
+// 重新开始当前专注
+const restartTimer = () => {
+  stopDialogVisible.value = false;
+  timerRestart(focusForm.value);
+  ElMessage.success("已重新开始专注");
 };
 
 // 显示停止确认弹窗
