@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use chrono::{Datelike, Duration, Local, NaiveDate};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use tauri::State;
 
@@ -322,17 +322,40 @@ pub fn records_structured(
     query: StructuredRecordsQuery,
 ) -> AppResult<Value> {
     let conn = connection(&state)?;
-    let stage = stage_json_by_id(&conn, query.stage_id)?.ok_or_else(|| invalid("阶段不存在"))?;
-    let stage_start = db::stage_start_date(&conn, query.stage_id)?;
+    let weeks = build_structured_records(&conn, query.stage_id, query.sort.as_deref())?;
+    Ok(json!({
+        "success": true,
+        "data": weeks,
+        "weeks": weeks,
+        "stage_name": stage_json_by_id(&conn, query.stage_id)?
+            .and_then(|stage| stage["name"].as_str().map(str::to_string))
+            .unwrap_or_default()
+    }))
+}
+
+pub fn structured_records_json(
+    conn: &Connection,
+    stage_id: i64,
+    sort: Option<&str>,
+) -> Result<Value> {
+    Ok(json!(build_structured_records(conn, stage_id, sort)?))
+}
+
+fn build_structured_records(
+    conn: &Connection,
+    stage_id: i64,
+    sort: Option<&str>,
+) -> Result<Vec<Value>> {
+    let stage_start = db::stage_start_date(conn, stage_id)?;
     let mut stmt =
         conn.prepare("SELECT id FROM log_entry WHERE stage_id = ?1 ORDER BY log_date ASC, id ASC")?;
     let ids = stmt
-        .query_map(params![query.stage_id], |row| row.get::<_, i64>(0))?
+        .query_map(params![stage_id], |row| row.get::<_, i64>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut grouped: BTreeMap<(i32, i32), (NaiveDate, NaiveDate, BTreeMap<String, Vec<Value>>)> =
         BTreeMap::new();
     for id in ids {
-        if let Some(record) = record_json_by_id(&conn, id)? {
+        if let Some(record) = record_json_by_id(conn, id)? {
             let log_date = db::parse_date(record["log_date"].as_str().unwrap_or(""))?;
             let (week_start, week_end, year, week_num) =
                 db::get_custom_week_window(log_date, stage_start);
@@ -345,14 +368,14 @@ pub fn records_structured(
                 .push(record);
         }
     }
-    let desc = query.sort.unwrap_or_else(|| "desc".to_string()) == "desc";
+    let desc = sort.unwrap_or("desc") == "desc";
     let today = Local::now().date_naive();
     let mut weeks = grouped
         .into_iter()
         .map(|((year, week_num), (week_start, week_end, days))| {
             let efficiency = calculate_completed_week_efficiency(
-                &conn,
-                query.stage_id,
+                conn,
+                stage_id,
                 week_start,
                 week_end,
                 stage_start,
@@ -368,7 +391,7 @@ pub fn records_structured(
                     let daily_eff: f64 = conn
                         .query_row(
                             "SELECT COALESCE(efficiency, 0) FROM daily_data WHERE log_date = ?1 AND stage_id = ?2",
-                            params![date, query.stage_id],
+                            params![date, stage_id],
                             |row| row.get(0),
                         )
                         .unwrap_or(0.0);
@@ -396,12 +419,7 @@ pub fn records_structured(
     if desc {
         weeks.reverse();
     }
-    Ok(json!({
-        "success": true,
-        "data": weeks,
-        "weeks": weeks,
-        "stage_name": stage["name"]
-    }))
+    Ok(weeks)
 }
 
 #[tauri::command]
@@ -1058,7 +1076,11 @@ fn is_incomplete_daily_bucket(bucket_date: NaiveDate, today: NaiveDate) -> bool 
     bucket_date == today
 }
 
-fn is_incomplete_weekly_bucket(bucket_start: NaiveDate, bucket_end: NaiveDate, today: NaiveDate) -> bool {
+fn is_incomplete_weekly_bucket(
+    bucket_start: NaiveDate,
+    bucket_end: NaiveDate,
+    today: NaiveDate,
+) -> bool {
     bucket_start <= today && today <= bucket_end
 }
 
@@ -1186,16 +1208,11 @@ fn build_weekly_series(
             .unwrap_or(global_start_date);
         let bucket_start = week_start(anchor);
         let bucket_end = bucket_start + Duration::days(6);
-        let elapsed_days = completed_days_in_week(
-            bucket_start,
-            bucket_end,
-            global_start_date,
-            today,
-            today,
-        )
-        .unwrap_or(agg.days as i64)
-        .min(agg.days as i64)
-        .clamp(1, 7) as f64;
+        let elapsed_days =
+            completed_days_in_week(bucket_start, bucket_end, global_start_date, today, today)
+                .unwrap_or(agg.days as i64)
+                .min(agg.days as i64)
+                .clamp(1, 7) as f64;
         weekly_labels.push(format!("{year}-W{week_num:02}"));
         weekly_duration_actuals.push(round_two(agg.duration_hours_total / elapsed_days));
         weekly_duration_totals.push(round_two(agg.duration_hours_total));
@@ -1256,7 +1273,11 @@ fn resolve_stage_snapshot(stages: &[(i64, String, NaiveDate)], target_date: Naiv
     } else {
         0.0
     };
-    let stage_start_flag = if target_date == current_stage.2 { 1.0 } else { 0.0 };
+    let stage_start_flag = if target_date == current_stage.2 {
+        1.0
+    } else {
+        0.0
+    };
     vec![
         (stage_age_days * 100.0).round() / 100.0,
         (stage_index_norm * 10000.0).round() / 10000.0,
@@ -1302,13 +1323,15 @@ fn forecast_signature(context: &OverviewContext) -> String {
 }
 
 fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<OverviewContext>> {
-    let mut stage_stmt = conn.prepare("SELECT id, name, start_date FROM stage ORDER BY start_date ASC")?;
+    let mut stage_stmt =
+        conn.prepare("SELECT id, name, start_date FROM stage ORDER BY start_date ASC")?;
     let stages = stage_stmt
         .query_map([], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
-                db::parse_date(&row.get::<_, String>(2)?).map_err(|_| rusqlite::Error::InvalidQuery)?,
+                db::parse_date(&row.get::<_, String>(2)?)
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -1332,16 +1355,22 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
         .map(|offset| first_log_date + Duration::days(offset))
         .collect::<Vec<_>>();
 
-    let mut duration_stmt =
-        conn.prepare("SELECT log_date, SUM(COALESCE(actual_duration, 0)) FROM log_entry GROUP BY log_date")?;
+    let mut duration_stmt = conn.prepare(
+        "SELECT log_date, SUM(COALESCE(actual_duration, 0)) FROM log_entry GROUP BY log_date",
+    )?;
     let duration_rows = duration_stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let daily_duration_map = duration_rows.into_iter().collect::<HashMap<_, _>>();
 
-    let mut eff_stmt = conn.prepare("SELECT log_date, efficiency FROM daily_data ORDER BY log_date ASC")?;
+    let mut eff_stmt =
+        conn.prepare("SELECT log_date, efficiency FROM daily_data ORDER BY log_date ASC")?;
     let eff_rows = eff_stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?)))?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let daily_efficiency_map = eff_rows.into_iter().collect::<HashMap<_, _>>();
 
@@ -1353,12 +1382,17 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
         .iter()
         .map(|day| {
             let key = day.format("%Y-%m-%d").to_string();
-            ((daily_duration_map.get(&key).copied().unwrap_or(0) as f64 / 60.0) * 100.0).round() / 100.0
+            ((daily_duration_map.get(&key).copied().unwrap_or(0) as f64 / 60.0) * 100.0).round()
+                / 100.0
         })
         .collect::<Vec<_>>();
     let daily_efficiency_optional = date_range
         .iter()
-        .map(|day| daily_efficiency_map.get(&day.format("%Y-%m-%d").to_string()).copied())
+        .map(|day| {
+            daily_efficiency_map
+                .get(&day.format("%Y-%m-%d").to_string())
+                .copied()
+        })
         .collect::<Vec<_>>();
     let daily_efficiency_actuals = daily_efficiency_optional
         .iter()
@@ -1385,7 +1419,9 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
         last_log_date + Duration::days(1)
     };
     let daily_future_stage_features = (0..14)
-        .map(|offset| resolve_stage_snapshot(&stages, daily_future_start + Duration::days(offset as i64)))
+        .map(|offset| {
+            resolve_stage_snapshot(&stages, daily_future_start + Duration::days(offset as i64))
+        })
         .collect::<Vec<_>>();
 
     let parsed_log_dates = log_dates
@@ -1411,7 +1447,10 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
     let weekly_reference_date = today;
     let weekly_future_stage_features = (0..8)
         .map(|offset| {
-            let snapshot = resolve_stage_snapshot(&stages, weekly_reference_date + Duration::days((offset * 7) as i64));
+            let snapshot = resolve_stage_snapshot(
+                &stages,
+                weekly_reference_date + Duration::days((offset * 7) as i64),
+            );
             vec![
                 ((snapshot.first().copied().unwrap_or(0.0) / 7.0) * 100.0).round() / 100.0,
                 snapshot.get(1).copied().unwrap_or(0.0),
@@ -1423,12 +1462,18 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
     let avg_daily_minutes = if daily_duration_actuals.is_empty() {
         0
     } else {
-        ((daily_duration_actuals.iter().sum::<f64>() / daily_duration_actuals.len() as f64) * 60.0).round() as i64
+        ((daily_duration_actuals.iter().sum::<f64>() / daily_duration_actuals.len() as f64) * 60.0)
+            .round() as i64
     };
     let efficiency_star = if daily_efficiency_actuals.is_empty() {
         Value::String("--".to_string())
     } else {
-        json!((daily_efficiency_actuals.iter().sum::<f64>() / daily_efficiency_actuals.len() as f64 * 100.0).round() / 100.0)
+        json!(
+            (daily_efficiency_actuals.iter().sum::<f64>() / daily_efficiency_actuals.len() as f64
+                * 100.0)
+                .round()
+                / 100.0
+        )
     };
 
     Ok(Some(OverviewContext {
@@ -1445,12 +1490,20 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
             labels: daily_labels.clone(),
             actuals: daily_duration_actuals.clone(),
             training_labels: daily_labels[..daily_train_len].to_vec(),
-            training_actuals: daily_duration_actuals[..daily_train_len].iter().copied().map(Some).collect(),
+            training_actuals: daily_duration_actuals[..daily_train_len]
+                .iter()
+                .copied()
+                .map(Some)
+                .collect(),
             training_stage_features: daily_stage_features[..daily_train_len].to_vec(),
             future_stage_features: daily_future_stage_features,
             ongoing: daily_incomplete,
-            ongoing_label: daily_incomplete.then(|| daily_labels.last().cloned()).flatten(),
-            ongoing_value: daily_incomplete.then(|| daily_duration_actuals.last().copied()).flatten(),
+            ongoing_label: daily_incomplete
+                .then(|| daily_labels.last().cloned())
+                .flatten(),
+            ongoing_value: daily_incomplete
+                .then(|| daily_duration_actuals.last().copied())
+                .flatten(),
         },
         daily_efficiency: OverviewDataset {
             labels: daily_labels.clone(),
@@ -1459,33 +1512,56 @@ fn build_overview_context(conn: &rusqlite::Connection) -> Result<Option<Overview
             training_actuals: daily_efficiency_optional[..daily_train_len].to_vec(),
             training_stage_features: daily_stage_features[..daily_train_len].to_vec(),
             future_stage_features: (0..14)
-                .map(|offset| resolve_stage_snapshot(&stages, daily_future_start + Duration::days(offset as i64)))
+                .map(|offset| {
+                    resolve_stage_snapshot(
+                        &stages,
+                        daily_future_start + Duration::days(offset as i64),
+                    )
+                })
                 .collect(),
             ongoing: daily_incomplete,
-            ongoing_label: daily_incomplete.then(|| daily_labels.last().cloned()).flatten(),
-            ongoing_value: daily_incomplete.then(|| daily_efficiency_optional.last().and_then(|value| *value)).flatten(),
+            ongoing_label: daily_incomplete
+                .then(|| daily_labels.last().cloned())
+                .flatten(),
+            ongoing_value: daily_incomplete
+                .then(|| daily_efficiency_optional.last().and_then(|value| *value))
+                .flatten(),
         },
         weekly_duration: OverviewDataset {
             labels: weekly_series.labels.clone(),
             actuals: weekly_series.duration_actuals.clone(),
             training_labels: weekly_series.labels[..weekly_train_len].to_vec(),
-            training_actuals: weekly_series.duration_totals[..weekly_train_len].iter().copied().map(Some).collect(),
+            training_actuals: weekly_series.duration_totals[..weekly_train_len]
+                .iter()
+                .copied()
+                .map(Some)
+                .collect(),
             training_stage_features: weekly_series.stage_features[..weekly_train_len].to_vec(),
             future_stage_features: weekly_future_stage_features.clone(),
             ongoing: weekly_series.ongoing,
             ongoing_label: weekly_series.ongoing_label.clone(),
-            ongoing_value: weekly_series.has_ongoing_actual.then(|| weekly_series.duration_actuals.last().copied()).flatten(),
+            ongoing_value: weekly_series
+                .has_ongoing_actual
+                .then(|| weekly_series.duration_actuals.last().copied())
+                .flatten(),
         },
         weekly_efficiency: OverviewDataset {
             labels: weekly_series.labels.clone(),
             actuals: weekly_series.efficiency_actuals.clone(),
             training_labels: weekly_series.labels[..weekly_train_len].to_vec(),
-            training_actuals: weekly_series.efficiency_actuals[..weekly_train_len].iter().copied().map(Some).collect(),
+            training_actuals: weekly_series.efficiency_actuals[..weekly_train_len]
+                .iter()
+                .copied()
+                .map(Some)
+                .collect(),
             training_stage_features: weekly_series.stage_features[..weekly_train_len].to_vec(),
             future_stage_features: weekly_future_stage_features,
             ongoing: weekly_series.ongoing,
             ongoing_label: weekly_series.ongoing_label,
-            ongoing_value: weekly_series.has_ongoing_actual.then(|| weekly_series.efficiency_actuals.last().copied()).flatten(),
+            ongoing_value: weekly_series
+                .has_ongoing_actual
+                .then(|| weekly_series.efficiency_actuals.last().copied())
+                .flatten(),
         },
     }))
 }

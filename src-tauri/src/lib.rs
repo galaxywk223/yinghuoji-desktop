@@ -199,6 +199,17 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::ai_provider_get,
+            commands::ai_provider_save,
+            commands::ai_provider_clear_key,
+            commands::ai_provider_models,
+            commands::ai_provider_test,
+            commands::ai_chat_sessions_list,
+            commands::ai_chat_session_create,
+            commands::ai_chat_session_get,
+            commands::ai_chat_session_delete,
+            commands::ai_chat_session_generate_title,
+            commands::ai_chat_send,
             commands::app_prepare_exit_for_update,
             commands::app_cancel_exit_for_update,
             commands::profile_get,

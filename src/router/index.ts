@@ -11,7 +11,6 @@ const MainLayout = () => import("@/components/layout/MainLayout.vue");
 
 const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/dashboard" },
-  { path: "/ai", redirect: "/dashboard" },
   {
     path: "/",
     component: MainLayout,
@@ -78,13 +77,21 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "课程画像" },
       },
       {
+        path: "ai",
+        name: "AiAssistant",
+        component: () => import("@/views/ai/AiAssistantView.vue"),
+        meta: { title: "AI 助手", fixedViewport: true },
+      },
+      {
         path: "settings",
         component: () => import("@/views/settings/SettingsLayout.vue"),
         redirect: "/settings/data",
         children: [
           {
             path: "ai",
-            redirect: "/settings/data",
+            name: "SettingsAi",
+            component: () => import("@/views/settings/AiSettings.vue"),
+            meta: { title: "AI 设置" },
           },
           {
             path: "data",

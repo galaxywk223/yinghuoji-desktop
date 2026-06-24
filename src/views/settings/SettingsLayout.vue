@@ -14,6 +14,10 @@
               <Icon icon="lucide:database" />
               <span>学习数据</span>
             </router-link>
+            <router-link to="/settings/ai" class="settings-nav-item">
+              <Icon icon="lucide:key-round" />
+              <span>AI 设置</span>
+            </router-link>
             <router-link to="/settings/stages" class="settings-nav-item">
               <Icon icon="lucide:flag" />
               <span>学习阶段</span>

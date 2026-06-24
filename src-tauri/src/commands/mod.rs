@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod app;
 pub mod backup;
 pub mod common;
@@ -6,6 +7,7 @@ pub mod features;
 pub mod forecast;
 pub mod learning;
 
+pub use ai::*;
 pub use app::*;
 pub use backup::*;
 pub use course_profile::*;

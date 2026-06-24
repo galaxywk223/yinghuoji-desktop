@@ -2,6 +2,7 @@
  * API模块索引
  */
 export { authAPI } from "./modules/auth";
+export { aiAPI } from "./modules/ai";
 export { stageAPI } from "./modules/stage";
 export { categoryAPI } from "./modules/category";
 export { courseProfileAPI } from "./modules/courseProfile";

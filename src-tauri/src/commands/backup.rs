@@ -185,8 +185,9 @@ fn ai_insights_json(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
 
 fn ai_chat_sessions_json(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, scope, scope_reference, date_reference, created_at, updated_at,
-                last_message_at
+        "SELECT id, title, scope, scope_reference, date_reference, context_summary,
+                context_summary_message_id, context_summary_updated_at,
+                created_at, updated_at, last_message_at
          FROM ai_chat_session
          ORDER BY datetime(last_message_at) DESC, id DESC",
     )?;
@@ -198,9 +199,12 @@ fn ai_chat_sessions_json(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
             "scope": row.get::<_, String>(2)?,
             "scope_reference": row.get::<_, Option<i64>>(3)?,
             "date_reference": row.get::<_, Option<String>>(4)?,
-            "created_at": row.get::<_, String>(5)?,
-            "updated_at": row.get::<_, String>(6)?,
-            "last_message_at": row.get::<_, String>(7)?,
+            "context_summary": row.get::<_, Option<String>>(5)?,
+            "context_summary_message_id": row.get::<_, Option<i64>>(6)?,
+            "context_summary_updated_at": row.get::<_, Option<String>>(7)?,
+            "created_at": row.get::<_, String>(8)?,
+            "updated_at": row.get::<_, String>(9)?,
+            "last_message_at": row.get::<_, String>(10)?,
         }))
     })?;
     rows.collect()
@@ -797,16 +801,23 @@ pub fn backup_import_zip(
     for item in ai_chat_sessions {
         tx.execute(
             "INSERT INTO ai_chat_session (
-                title, scope, scope_reference, date_reference, created_at, updated_at, last_message_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                title, scope, scope_reference, date_reference, context_summary,
+                context_summary_message_id, context_summary_updated_at,
+                created_at, updated_at, last_message_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 item["title"].as_str().unwrap_or("新的对话"),
                 item["scope"].as_str().unwrap_or("global"),
                 value_as_i64(&item["scope_reference"]),
                 item["date_reference"].as_str(),
+                item["context_summary"].as_str(),
+                value_as_i64(&item["context_summary_message_id"]),
+                item["context_summary_updated_at"].as_str(),
                 item["created_at"].as_str().unwrap_or(&db::now_local_iso()),
                 item["updated_at"].as_str().unwrap_or(&db::now_local_iso()),
-                item["last_message_at"].as_str().unwrap_or(&db::now_local_iso())
+                item["last_message_at"]
+                    .as_str()
+                    .unwrap_or(&db::now_local_iso())
             ],
         )?;
         if let Some(old_id) = value_as_i64(&item["id"]) {

@@ -138,6 +138,9 @@ pub fn initialize_database(state: &AppState) -> Result<()> {
           scope TEXT NOT NULL DEFAULT 'global',
           scope_reference INTEGER,
           date_reference TEXT,
+          context_summary TEXT,
+          context_summary_message_id INTEGER,
+          context_summary_updated_at TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           last_message_at TEXT NOT NULL
@@ -157,6 +160,7 @@ pub fn initialize_database(state: &AppState) -> Result<()> {
         );
         "#,
     )?;
+    ensure_ai_chat_session_columns(&conn)?;
 
     let now = now_local_iso();
     conn.execute(
@@ -176,6 +180,46 @@ pub fn initialize_database(state: &AppState) -> Result<()> {
     conn.execute(
         "INSERT OR IGNORE INTO app_setting (key, value, updated_at) VALUES ('active_stage_id', '0', ?)",
         params![now_local_iso()],
+    )?;
+    Ok(())
+}
+
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let columns = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(columns.iter().any(|item| item == column))
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<()> {
+    if !column_exists(conn, table, column)? {
+        conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+            [],
+        )?;
+    }
+    Ok(())
+}
+
+fn ensure_ai_chat_session_columns(conn: &Connection) -> Result<()> {
+    add_column_if_missing(conn, "ai_chat_session", "context_summary", "TEXT")?;
+    add_column_if_missing(
+        conn,
+        "ai_chat_session",
+        "context_summary_message_id",
+        "INTEGER",
+    )?;
+    add_column_if_missing(
+        conn,
+        "ai_chat_session",
+        "context_summary_updated_at",
+        "TEXT",
     )?;
     Ok(())
 }

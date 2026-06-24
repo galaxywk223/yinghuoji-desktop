@@ -46,7 +46,10 @@
       </div>
     </aside>
 
-    <div class="main-shell">
+    <div
+      class="main-shell"
+      :class="{ 'main-shell--fixed-viewport': route.meta.fixedViewport }"
+    >
       <header class="main-topbar">
         <div class="main-topbar__left">
           <button
@@ -82,7 +85,10 @@
         </div>
       </header>
 
-      <main class="main-content">
+      <main
+        class="main-content"
+        :class="{ 'main-content--fixed-viewport': route.meta.fixedViewport }"
+      >
         <router-view v-slot="{ Component }">
           <keep-alive :max="3">
             <component :is="Component" :key="$route.fullPath" />
@@ -111,6 +117,7 @@ const navItems = [
   { to: "/records", label: "学习记录", icon: "lucide:notebook-tabs" },
   { to: "/charts", label: "学习回顾", icon: "lucide:chart-column-big" },
   { to: "/course-profile", label: "课程画像", icon: "lucide:graduation-cap" },
+  { to: "/ai", label: "AI 助手", icon: "lucide:sparkles" },
   { to: "/countdown", label: "倒计时", icon: "lucide:calendar-clock" },
   { to: "/milestones", label: "成就时刻", icon: "lucide:trophy" },
   { to: "/settings", label: "偏好设置", icon: "lucide:settings-2" },

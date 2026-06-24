@@ -128,6 +128,40 @@ async function baseRequest(config: RequestConfig) {
       };
     }
 
+    if (url === "/api/ai/provider" && method === "get") {
+      return await invoke("ai_provider_get");
+    }
+    if (url === "/api/ai/provider" && method === "post") {
+      return await invoke("ai_provider_save", { payload: data });
+    }
+    if (url === "/api/ai/provider/test" && method === "post") {
+      return await invoke("ai_provider_test");
+    }
+    if (url === "/api/ai/provider/models" && method === "post") {
+      return await invoke("ai_provider_models", { payload: data });
+    }
+    if (url === "/api/ai/provider/key" && method === "delete") {
+      return await invoke("ai_provider_clear_key");
+    }
+    if (url === "/api/ai/chat/sessions" && method === "get") {
+      return await invoke("ai_chat_sessions_list");
+    }
+    if (url === "/api/ai/chat/sessions" && method === "post") {
+      return await invoke("ai_chat_session_create", { payload: data });
+    }
+    if (/^\/api\/ai\/chat\/sessions\/\d+\/title$/.test(url) && method === "post") {
+      const sessionId = Number(url.split("/")[5]);
+      return await invoke("ai_chat_session_generate_title", { sessionId });
+    }
+    if (/^\/api\/ai\/chat\/sessions\/\d+$/.test(url)) {
+      const sessionId = Number(url.split("/").pop());
+      if (method === "get") return await invoke("ai_chat_session_get", { sessionId });
+      if (method === "delete") return await invoke("ai_chat_session_delete", { sessionId });
+    }
+    if (url === "/api/ai/chat/send" && method === "post") {
+      return await invoke("ai_chat_send", { payload: data });
+    }
+
     if (url === "/api/stages" && method === "get") {
       return await invoke("stages_list");
     }
