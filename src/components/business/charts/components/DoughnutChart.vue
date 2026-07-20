@@ -195,55 +195,6 @@ const option = computed(() => {
         fontSize: 12,
       },
     },
-    graphic:
-      computedTotal.value > 0
-        ? {
-            elements: [
-              {
-                type: "group",
-                left: "center",
-                top: "42%",
-                children: [
-                  {
-                    type: "text",
-                    style: {
-                      text: uiText.value.totalLabel,
-                      fill: themeTokens.value.textMuted,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      textAlign: "center",
-                    },
-                    left: "center",
-                  },
-                  {
-                    type: "text",
-                    top: 22,
-                    style: {
-                      text: `${computedTotal.value.toFixed(1)}`,
-                      fill: themeTokens.value.textHeading,
-                      fontSize: 26,
-                      fontWeight: 800,
-                      textAlign: "center",
-                    },
-                    left: "center",
-                  },
-                  {
-                    type: "text",
-                    top: 48,
-                    style: {
-                      text: uiText.value.hoursSuffix,
-                      fill: themeTokens.value.textMuted,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      textAlign: "center",
-                    },
-                    left: "center",
-                  },
-                ],
-              },
-            ],
-          }
-        : undefined,
     series: [
       {
         name: uiText.value.pieName,
