@@ -2,6 +2,15 @@
 <template>
   <div class="focus-info">
     <div class="info-item">
+      <span class="info-label">计时模式</span>
+      <span class="info-value">
+        {{ formData.mode === "countdown" ? "倒计时" : "正计时" }}
+        <template v-if="formData.mode === 'countdown'">
+          · {{ formData.durationMinutes }} 分钟
+        </template>
+      </span>
+    </div>
+    <div class="info-item">
       <span class="info-label">记录名称</span>
       <span class="info-value">{{ formData.name }}</span>
     </div>

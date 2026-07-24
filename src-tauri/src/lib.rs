@@ -4,7 +4,7 @@ mod models;
 
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use serde::Serialize;
 use tauri::{
@@ -21,6 +21,7 @@ const TRAY_EXIT_ID: &str = "tray-exit-app";
 #[derive(Default)]
 pub struct AppLifecycleState {
     exit_requested: AtomicBool,
+    focus_reminder_generation: AtomicU64,
 }
 
 impl AppLifecycleState {
@@ -34,6 +35,14 @@ impl AppLifecycleState {
 
     pub fn is_exit_requested(&self) -> bool {
         self.exit_requested.load(Ordering::SeqCst)
+    }
+
+    pub fn next_focus_reminder_generation(&self) -> u64 {
+        self.focus_reminder_generation.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    pub fn focus_reminder_generation(&self) -> u64 {
+        self.focus_reminder_generation.load(Ordering::SeqCst)
     }
 }
 
@@ -97,7 +106,7 @@ fn hide_main_window<R: Runtime>(window: &Window<R>) {
     let _ = window.hide();
 }
 
-fn restore_main_window<R: Runtime>(app: &AppHandle<R>) {
+pub(crate) fn restore_main_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         let _ = window.set_skip_taskbar(false);
         let _ = window.show();
@@ -158,6 +167,7 @@ pub fn run() {
             |app, _args, _cwd| restore_main_window(app),
         ))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
@@ -212,6 +222,9 @@ pub fn run() {
             commands::ai_chat_send,
             commands::app_prepare_exit_for_update,
             commands::app_cancel_exit_for_update,
+            commands::app_restore_main_window,
+            commands::focus_reminder_schedule,
+            commands::focus_reminder_cancel,
             commands::profile_get,
             commands::profile_update,
             commands::settings_get,

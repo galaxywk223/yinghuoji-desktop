@@ -1,6 +1,13 @@
 <!-- 专注计时器显示组件 -->
 <template>
-  <div class="timer-display" :class="{ 'timer-active': isActive }">
+  <div
+    class="timer-display"
+    :class="{
+      'timer-active': isActive,
+      'timer-countdown': timerMode === 'countdown',
+      'timer-completed': status === 'completed' && timerMode === 'countdown',
+    }"
+  >
     <div class="time-circle">
       <svg class="progress-ring" :width="ringSize" :height="ringSize">
         <circle
@@ -40,7 +47,10 @@
           :stroke-dashoffset="innerProgressOffset"
         />
       </svg>
-      <div class="time-text">
+      <div class="time-text" aria-live="polite">
+        <span v-if="status === 'completed' && timerMode === 'countdown'" class="complete-mark">
+          到时
+        </span>
         <span class="time-value">{{ formattedTime }}</span>
         <span class="time-label">{{ timeLabel }}</span>
         <span class="time-hint">{{ progressHint }}</span>
@@ -61,6 +71,26 @@ const props = defineProps({
   isActive: {
     type: Boolean,
     default: false,
+  },
+  displaySeconds: {
+    type: Number,
+    default: 0,
+  },
+  targetDurationSeconds: {
+    type: Number,
+    default: 0,
+  },
+  countdownProgress: {
+    type: Number,
+    default: 0,
+  },
+  timerMode: {
+    type: String,
+    default: "countup",
+  },
+  status: {
+    type: String,
+    default: "idle",
   },
 });
 
@@ -85,6 +115,12 @@ function calcCycleOffset(elapsed, cycle, circumference) {
 }
 
 const innerProgressOffset = computed(() => {
+  if (props.timerMode === "countdown") {
+    if (props.displaySeconds <= 0) return innerCircumference;
+    const secondsInMinute = props.displaySeconds % 60;
+    const minuteProgress = secondsInMinute === 0 ? 1 : secondsInMinute / 60;
+    return innerCircumference - minuteProgress * innerCircumference;
+  }
   return calcCycleOffset(
     props.elapsedSeconds,
     innerCycleSeconds,
@@ -93,6 +129,10 @@ const innerProgressOffset = computed(() => {
 });
 
 const outerProgressOffset = computed(() => {
+  if (props.timerMode === "countdown") {
+    const progress = Math.min(1, Math.max(0, props.countdownProgress));
+    return outerCircumference - progress * outerCircumference;
+  }
   return calcCycleOffset(
     props.elapsedSeconds,
     outerCycleSeconds,
@@ -101,19 +141,27 @@ const outerProgressOffset = computed(() => {
 });
 
 const formattedTime = computed(() => {
-  const hours = Math.floor(props.elapsedSeconds / 3600);
-  const minutes = Math.floor((props.elapsedSeconds % 3600) / 60);
-  const seconds = props.elapsedSeconds % 60;
+  const value =
+    props.timerMode === "countdown"
+      ? props.displaySeconds
+      : props.elapsedSeconds;
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const seconds = value % 60;
   return [hours, minutes, seconds]
     .map((unit) => unit.toString().padStart(2, "0"))
     .join(":");
 });
 
 const timeLabel = computed(() => {
-  return "时 : 分 : 秒";
+  return props.timerMode === "countdown" ? "剩余时间" : "时 : 分 : 秒";
 });
 
 const progressHint = computed(() => {
+  if (props.timerMode === "countdown") {
+    if (props.status === "completed") return "本轮专注已完成";
+    return `共 ${Math.round(props.targetDurationSeconds / 60)} 分钟`;
+  }
   return "内环 1h · 外环 12h";
 });
 </script>
@@ -212,6 +260,13 @@ const progressHint = computed(() => {
         color: var(--color-text-muted);
         letter-spacing: 0.05em;
       }
+
+      .complete-mark {
+        margin-bottom: 10px;
+        color: var(--color-success);
+        font-size: 0.85rem;
+        font-weight: 800;
+      }
     }
   }
 
@@ -223,6 +278,43 @@ const progressHint = computed(() => {
     .progress-ring-circle.inner {
       stroke: var(--color-primary-dark);
     }
+  }
+
+  &.timer-countdown .progress-ring-circle {
+    &.outer {
+      stroke: var(--color-primary);
+    }
+
+    &.inner {
+      stroke: var(--color-accent);
+    }
+  }
+
+  &.timer-completed {
+    .progress-ring-circle.outer,
+    .progress-ring-circle.inner {
+      stroke: var(--color-success);
+    }
+
+    .time-circle {
+      animation: focus-complete-pulse 1.4s ease-in-out infinite;
+    }
+  }
+}
+
+@keyframes focus-complete-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.025);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-display.timer-completed .time-circle {
+    animation: none;
   }
 }
 </style>

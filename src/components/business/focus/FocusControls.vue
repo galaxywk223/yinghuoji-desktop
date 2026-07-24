@@ -1,7 +1,7 @@
 <!-- 专注控制按钮组件 -->
 <template>
   <div class="focus-controls">
-    <template v-if="!isRunning && !isPaused">
+    <template v-if="!isRunning && !isPaused && !isCompleted">
       <div class="button-stack">
         <el-button
           class="control-btn primary-btn"
@@ -10,9 +10,21 @@
           :loading="loading"
           @click="$emit('start')"
         >
-          专注计时
+          {{ timerMode === "countdown" ? "开始倒计时" : "专注计时" }}
         </el-button>
         <button class="return-link" @click="$emit('go-back')">返回</button>
+      </div>
+    </template>
+
+    <template v-else-if="isCompleted">
+      <div class="button-stack">
+        <el-button
+          class="control-btn primary-btn"
+          size="large"
+          @click="$emit('review')"
+        >
+          处理本次记录
+        </el-button>
       </div>
     </template>
 
@@ -103,6 +115,14 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  isCompleted: {
+    type: Boolean,
+    default: false,
+  },
+  timerMode: {
+    type: String,
+    default: "countup",
+  },
 });
 
 // Emits
@@ -114,6 +134,7 @@ defineEmits([
   "restart",
   "cancel",
   "go-back",
+  "review",
 ]);
 </script>
 

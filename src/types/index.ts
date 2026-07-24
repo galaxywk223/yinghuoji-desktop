@@ -153,12 +153,16 @@ export interface Settings {
   [key: string]: any;
 }
 
+export type FocusTimerMode = "countup" | "countdown";
+
 // 专注表单数据类型
 export interface FocusFormData {
   name: string;
   categoryId: number | null;
   subcategoryId: number | null;
-  notes: string;
+  notes?: string;
+  mode?: FocusTimerMode;
+  durationMinutes?: number;
 }
 
 // 认证相关API响应类型

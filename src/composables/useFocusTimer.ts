@@ -1,18 +1,27 @@
-/**
- * 专注计时器 composable
- * 处理计时器的逻辑和状态管理
- */
-import { ref, type Ref } from "vue";
-import type { FocusFormData } from "@/types";
+import { computed, ref, type ComputedRef, type Ref } from "vue";
+import type { FocusFormData, FocusTimerMode } from "@/types";
+import {
+  cancelFocusReminder,
+  scheduleFocusReminder,
+} from "@/utils/focusReminder";
 
 const FOCUS_STATE_KEY = "focus_session_state";
+const DEFAULT_COUNTDOWN_MINUTES = 25;
 
-// 存储的状态类型
+export type FocusSessionStatus = "idle" | "running" | "paused" | "completed";
+export type FocusCompletionReason = "manual" | "countdown" | null;
+
 interface SavedState {
+  version?: number;
   formData: FocusFormData;
-  isTimerRunning: boolean;
-  isPaused: boolean;
-  elapsedSeconds: number;
+  status?: FocusSessionStatus;
+  mode?: FocusTimerMode;
+  targetDurationSeconds?: number;
+  completionReason?: FocusCompletionReason;
+  completionNotificationSent?: boolean;
+  isTimerRunning?: boolean;
+  isPaused?: boolean;
+  elapsedSeconds?: number;
   sessionStartTime?: string | null;
   sessionEndTime?: string | null;
   pauseStartedAt?: string | null;
@@ -22,44 +31,140 @@ interface SavedState {
   pauseTime?: string | null;
 }
 
-// 返回值类型
+interface FocusTimerConfig {
+  mode?: FocusTimerMode;
+  durationMinutes?: number;
+}
+
 interface UseFocusTimerReturn {
-  // 状态
-  isTimerRunning: Ref<boolean>;
-  isPaused: Ref<boolean>;
+  status: Ref<FocusSessionStatus>;
+  isTimerRunning: ComputedRef<boolean>;
+  isPaused: ComputedRef<boolean>;
+  isCompleted: ComputedRef<boolean>;
+  timerMode: Ref<FocusTimerMode>;
   elapsedSeconds: Ref<number>;
+  displaySeconds: ComputedRef<number>;
+  targetDurationSeconds: Ref<number>;
+  countdownProgress: ComputedRef<number>;
+  completionReason: Ref<FocusCompletionReason>;
+  completionNotificationSent: Ref<boolean>;
+  sessionFormData: Ref<FocusFormData | null>;
   sessionStartTime: Ref<Date | null>;
   sessionEndTime: Ref<Date | null>;
   pauseStartedAt: Ref<Date | null>;
-
-  // 方法
-  startTimer: (formData: FocusFormData) => void;
-  pauseTimer: (formData: FocusFormData) => void;
-  resumeTimer: (formData: FocusFormData) => void;
-  stopTimer: () => number;
-  restartTimer: (formData: FocusFormData) => void;
-  cancelSession: () => void;
+  startTimer: (formData: FocusFormData, config?: FocusTimerConfig) => Promise<void>;
+  pauseTimer: (formData: FocusFormData) => Promise<void>;
+  resumeTimer: (formData: FocusFormData) => Promise<void>;
+  stopTimer: () => Promise<number>;
+  restartTimer: (formData?: FocusFormData) => Promise<void>;
+  forceCompleteCountdown: () => void;
+  cancelSession: () => Promise<void>;
   completeSession: () => number;
   restoreState: () => FocusFormData | null;
   clearState: () => void;
   resetTimer: () => void;
-  saveState: (formData: FocusFormData) => void;
+  saveState: (formData?: FocusFormData | null) => void;
 }
 
-// 全局单例状态（模块级变量）
-const isTimerRunning: Ref<boolean> = ref(false);
-const isPaused: Ref<boolean> = ref(false);
-const elapsedSeconds: Ref<number> = ref(0);
-const sessionStartTime: Ref<Date | null> = ref(null);
-const sessionEndTime: Ref<Date | null> = ref(null);
-const pauseStartedAt: Ref<Date | null> = ref(null);
-const currentRunStartedAt: Ref<Date | null> = ref(null);
-const accumulatedElapsedSeconds: Ref<number> = ref(0);
-const timerInterval: Ref<NodeJS.Timeout | number | null> = ref(null);
+const status = ref<FocusSessionStatus>("idle");
+const timerMode = ref<FocusTimerMode>("countup");
+const elapsedSeconds = ref(0);
+const targetDurationSeconds = ref(0);
+const completionReason = ref<FocusCompletionReason>(null);
+const sessionFormData = ref<FocusFormData | null>(null);
+const sessionStartTime = ref<Date | null>(null);
+const sessionEndTime = ref<Date | null>(null);
+const pauseStartedAt = ref<Date | null>(null);
+const currentRunStartedAt = ref<Date | null>(null);
+const accumulatedElapsedSeconds = ref(0);
+const completionNotificationSent = ref(false);
+const timerInterval = ref<ReturnType<typeof setInterval> | null>(null);
+let stateRestored = false;
+
+const isTimerRunning = computed(() => status.value === "running");
+const isPaused = computed(() => status.value === "paused");
+const isCompleted = computed(() => status.value === "completed");
+const displaySeconds = computed(() =>
+  timerMode.value === "countdown"
+    ? Math.max(0, targetDurationSeconds.value - elapsedSeconds.value)
+    : elapsedSeconds.value,
+);
+const countdownProgress = computed(() => {
+  if (timerMode.value !== "countdown" || targetDurationSeconds.value <= 0) {
+    return 0;
+  }
+  return displaySeconds.value / targetDurationSeconds.value;
+});
+
+function validDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizedDurationSeconds(config?: FocusTimerConfig): number {
+  if (config?.mode !== "countdown") return 0;
+  const minutes = Math.min(
+    720,
+    Math.max(1, Math.round(config.durationMinutes ?? DEFAULT_COUNTDOWN_MINUTES)),
+  );
+  return minutes * 60;
+}
 
 export function useFocusTimer(): UseFocusTimerReturn {
+  const stopTimerInterval = (): void => {
+    if (timerInterval.value) {
+      clearInterval(timerInterval.value);
+      timerInterval.value = null;
+    }
+  };
+
+  const saveState = (formData = sessionFormData.value): void => {
+    if (!formData || status.value === "idle") {
+      localStorage.removeItem(FOCUS_STATE_KEY);
+      return;
+    }
+
+    const state: SavedState = {
+      version: 2,
+      formData,
+      status: status.value,
+      mode: timerMode.value,
+      targetDurationSeconds: targetDurationSeconds.value,
+      completionReason: completionReason.value,
+      completionNotificationSent: completionNotificationSent.value,
+      isTimerRunning: isTimerRunning.value,
+      isPaused: isPaused.value,
+      elapsedSeconds: elapsedSeconds.value,
+      sessionStartTime: sessionStartTime.value?.toISOString() ?? null,
+      sessionEndTime: sessionEndTime.value?.toISOString() ?? null,
+      pauseStartedAt: pauseStartedAt.value?.toISOString() ?? null,
+      currentRunStartedAt: currentRunStartedAt.value?.toISOString() ?? null,
+      accumulatedElapsedSeconds: accumulatedElapsedSeconds.value,
+    };
+    localStorage.setItem(FOCUS_STATE_KEY, JSON.stringify(state));
+  };
+
+  const finishCountdown = (now = new Date()): void => {
+    if (timerMode.value !== "countdown" || status.value !== "running") return;
+
+    const overshootSeconds = Math.max(
+      0,
+      elapsedSeconds.value - targetDurationSeconds.value,
+    );
+    elapsedSeconds.value = targetDurationSeconds.value;
+    accumulatedElapsedSeconds.value = targetDurationSeconds.value;
+    sessionEndTime.value = new Date(now.getTime() - overshootSeconds * 1000);
+    currentRunStartedAt.value = null;
+    pauseStartedAt.value = null;
+    completionReason.value = "countdown";
+    status.value = "completed";
+    stopTimerInterval();
+    saveState();
+  };
+
   const syncElapsedSeconds = (now = new Date()): number => {
-    if (!isTimerRunning.value || !currentRunStartedAt.value) {
+    if (status.value !== "running" || !currentRunStartedAt.value) {
       elapsedSeconds.value = accumulatedElapsedSeconds.value;
       return elapsedSeconds.value;
     }
@@ -69,247 +174,265 @@ export function useFocusTimer(): UseFocusTimerReturn {
       Math.floor((now.getTime() - currentRunStartedAt.value.getTime()) / 1000),
     );
     elapsedSeconds.value = accumulatedElapsedSeconds.value + diffSeconds;
+
+    if (
+      timerMode.value === "countdown" &&
+      elapsedSeconds.value >= targetDurationSeconds.value
+    ) {
+      finishCountdown(now);
+    }
     return elapsedSeconds.value;
   };
 
-  // 计时器状态（已移至全局）到 localStorage
-  const saveState = (formData: FocusFormData): void => {
-    const state: SavedState = {
-      formData,
-      isTimerRunning: isTimerRunning.value,
-      isPaused: isPaused.value,
-      elapsedSeconds: elapsedSeconds.value,
-      sessionStartTime: sessionStartTime.value
-        ? sessionStartTime.value.toISOString()
-        : null,
-      sessionEndTime: sessionEndTime.value
-        ? sessionEndTime.value.toISOString()
-        : null,
-      pauseStartedAt: pauseStartedAt.value
-        ? pauseStartedAt.value.toISOString()
-        : null,
-      currentRunStartedAt: currentRunStartedAt.value
-        ? currentRunStartedAt.value.toISOString()
-        : null,
-      accumulatedElapsedSeconds: accumulatedElapsedSeconds.value,
-    };
-    localStorage.setItem(FOCUS_STATE_KEY, JSON.stringify(state));
-  };
-
-  // 开始计时器间隔
   const startTimerInterval = (): void => {
-    if (timerInterval.value) {
-      clearInterval(timerInterval.value);
+    stopTimerInterval();
+    timerInterval.value = setInterval(() => syncElapsedSeconds(), 250);
+  };
+
+  const scheduleCurrentReminder = async (): Promise<void> => {
+    if (
+      timerMode.value !== "countdown" ||
+      status.value !== "running" ||
+      !sessionFormData.value
+    ) {
+      return;
     }
 
-    timerInterval.value = setInterval(() => {
-      if (!currentRunStartedAt.value) {
-        return;
-      }
-      syncElapsedSeconds();
-    }, 1000);
+    const remainingSeconds = Math.max(
+      0,
+      targetDurationSeconds.value - elapsedSeconds.value,
+    );
+    const deadline = new Date(Date.now() + remainingSeconds * 1000);
+    await scheduleFocusReminder(
+      deadline,
+      sessionFormData.value.name,
+      targetDurationSeconds.value / 60,
+    );
+    saveState();
   };
 
-  // 停止计时器间隔
-  const stopTimerInterval = (): void => {
-    if (timerInterval.value) {
-      clearInterval(timerInterval.value);
-      timerInterval.value = null;
-    }
-  };
-
-  // 从 localStorage 恢复状态
-  const restoreState = (): FocusFormData | null => {
-    try {
-      const savedState = localStorage.getItem(FOCUS_STATE_KEY);
-      if (savedState) {
-        const state: SavedState = JSON.parse(savedState);
-        console.log("恢复的专注状态:", state);
-
-        isTimerRunning.value = state.isTimerRunning || false;
-        isPaused.value = state.isPaused || false;
-        accumulatedElapsedSeconds.value =
-          state.accumulatedElapsedSeconds ?? state.elapsedSeconds ?? 0;
-        elapsedSeconds.value = state.elapsedSeconds || 0;
-
-        const resolvedSessionStart =
-          state.sessionStartTime ?? state.startTime ?? null;
-        const resolvedPauseStartedAt =
-          state.pauseStartedAt ?? state.pauseTime ?? null;
-
-        sessionStartTime.value = resolvedSessionStart
-          ? new Date(resolvedSessionStart)
-          : null;
-        sessionEndTime.value = state.sessionEndTime
-          ? new Date(state.sessionEndTime)
-          : null;
-        pauseStartedAt.value = resolvedPauseStartedAt
-          ? new Date(resolvedPauseStartedAt)
-          : null;
-        currentRunStartedAt.value = state.currentRunStartedAt
-          ? new Date(state.currentRunStartedAt)
-          : isTimerRunning.value && state.startTime
-            ? new Date(state.startTime)
-            : null;
-
-        if (isTimerRunning.value) {
-          syncElapsedSeconds();
-          if (!timerInterval.value) {
-            startTimerInterval();
-          }
-        } else {
-          elapsedSeconds.value = accumulatedElapsedSeconds.value;
-        }
-
-        return state.formData;
-      }
-    } catch (error) {
-      console.error("恢复专注状态失败:", error);
-      clearState();
-    }
-    return null;
-  };
-
-  // 清除状态
-  const clearState = (): void => {
-    localStorage.removeItem(FOCUS_STATE_KEY);
-    resetTimer();
-  };
-
-  // 重置计时器
   const resetTimer = (): void => {
-    isTimerRunning.value = false;
-    isPaused.value = false;
+    status.value = "idle";
+    timerMode.value = "countup";
     elapsedSeconds.value = 0;
+    targetDurationSeconds.value = 0;
+    completionReason.value = null;
+    sessionFormData.value = null;
     sessionStartTime.value = null;
     sessionEndTime.value = null;
     pauseStartedAt.value = null;
     currentRunStartedAt.value = null;
     accumulatedElapsedSeconds.value = 0;
+    completionNotificationSent.value = false;
     stopTimerInterval();
   };
 
-  // 开始计时
-  const startTimer = (formData: FocusFormData): void => {
+  const clearState = (): void => {
+    localStorage.removeItem(FOCUS_STATE_KEY);
+    void cancelFocusReminder();
+    resetTimer();
+  };
+
+  const restoreState = (): FocusFormData | null => {
+    if (stateRestored) return sessionFormData.value;
+    stateRestored = true;
+
+    try {
+      const savedState = localStorage.getItem(FOCUS_STATE_KEY);
+      if (!savedState) return null;
+
+      const state: SavedState = JSON.parse(savedState);
+      sessionFormData.value = state.formData;
+      status.value =
+        state.status ??
+        (state.isTimerRunning
+          ? "running"
+          : state.isPaused
+            ? "paused"
+            : "idle");
+      timerMode.value = state.mode ?? state.formData?.mode ?? "countup";
+      targetDurationSeconds.value =
+        state.targetDurationSeconds ??
+        (timerMode.value === "countdown"
+          ? (state.formData?.durationMinutes ?? DEFAULT_COUNTDOWN_MINUTES) * 60
+          : 0);
+      completionReason.value = state.completionReason ?? null;
+      completionNotificationSent.value =
+        state.completionNotificationSent ?? false;
+      accumulatedElapsedSeconds.value =
+        state.accumulatedElapsedSeconds ?? state.elapsedSeconds ?? 0;
+      elapsedSeconds.value = state.elapsedSeconds ?? 0;
+      sessionStartTime.value = validDate(
+        state.sessionStartTime ?? state.startTime,
+      );
+      sessionEndTime.value = validDate(state.sessionEndTime);
+      pauseStartedAt.value = validDate(
+        state.pauseStartedAt ?? state.pauseTime,
+      );
+      currentRunStartedAt.value = validDate(state.currentRunStartedAt);
+
+      if (
+        status.value === "running" &&
+        !currentRunStartedAt.value &&
+        state.startTime
+      ) {
+        currentRunStartedAt.value = validDate(state.startTime);
+      }
+
+      if (status.value === "running") {
+        syncElapsedSeconds();
+        if (status.value === "running") {
+          startTimerInterval();
+          if (timerMode.value === "countdown") {
+            void scheduleCurrentReminder();
+          }
+        }
+      } else {
+        elapsedSeconds.value = accumulatedElapsedSeconds.value;
+      }
+      return sessionFormData.value;
+    } catch (error) {
+      console.error("恢复专注状态失败", error);
+      clearState();
+      return null;
+    }
+  };
+
+  const startTimer = async (
+    formData: FocusFormData,
+    config: FocusTimerConfig = {},
+  ): Promise<void> => {
     const now = new Date();
+    sessionFormData.value = { ...formData };
+    timerMode.value = config.mode ?? formData.mode ?? "countup";
+    targetDurationSeconds.value = normalizedDurationSeconds({
+      mode: timerMode.value,
+      durationMinutes: config.durationMinutes ?? formData.durationMinutes,
+    });
     sessionStartTime.value = now;
     sessionEndTime.value = null;
     pauseStartedAt.value = null;
     currentRunStartedAt.value = now;
     accumulatedElapsedSeconds.value = 0;
-    isTimerRunning.value = true;
-    isPaused.value = false;
     elapsedSeconds.value = 0;
-
+    completionReason.value = null;
+    completionNotificationSent.value = false;
+    status.value = "running";
     startTimerInterval();
-    saveState(formData);
+    saveState();
 
-    console.log("开始专注计时:", now);
-  };
-
-  // 暂停计时
-  const pauseTimer = (formData: FocusFormData): void => {
-    if (isTimerRunning.value) {
-      syncElapsedSeconds();
-      accumulatedElapsedSeconds.value = elapsedSeconds.value;
-      pauseStartedAt.value = new Date();
-      currentRunStartedAt.value = null;
-      isTimerRunning.value = false;
-      isPaused.value = true;
-
-      stopTimerInterval();
-      saveState(formData);
-
-      console.log("暂停专注计时:", pauseStartedAt.value);
+    if (timerMode.value === "countdown") {
+      await scheduleCurrentReminder();
+    } else {
+      await cancelFocusReminder();
     }
   };
 
-  // 恢复计时
-  const resumeTimer = (formData: FocusFormData): void => {
-    if (isPaused.value && pauseStartedAt.value && sessionStartTime.value) {
-      currentRunStartedAt.value = new Date();
-      isTimerRunning.value = true;
-      isPaused.value = false;
-      pauseStartedAt.value = null;
-      sessionEndTime.value = null;
+  const pauseTimer = async (formData: FocusFormData): Promise<void> => {
+    if (status.value !== "running") return;
 
-      startTimerInterval();
-      saveState(formData);
-
-      console.log("恢复专注计时");
-    }
+    syncElapsedSeconds();
+    if (status.value !== "running") return;
+    accumulatedElapsedSeconds.value = elapsedSeconds.value;
+    pauseStartedAt.value = new Date();
+    currentRunStartedAt.value = null;
+    sessionFormData.value = { ...formData };
+    status.value = "paused";
+    completionNotificationSent.value = false;
+    stopTimerInterval();
+    await cancelFocusReminder();
+    saveState();
   };
 
-  // 停止计时
-  const stopTimer = (): number => {
-    if (isTimerRunning.value) {
+  const resumeTimer = async (formData: FocusFormData): Promise<void> => {
+    if (status.value !== "paused" || !sessionStartTime.value) return;
+
+    currentRunStartedAt.value = new Date();
+    pauseStartedAt.value = null;
+    sessionEndTime.value = null;
+    sessionFormData.value = { ...formData };
+    status.value = "running";
+    startTimerInterval();
+    saveState();
+    await scheduleCurrentReminder();
+  };
+
+  const stopTimer = async (): Promise<number> => {
+    if (status.value === "running") {
       syncElapsedSeconds();
+      if (isCompleted.value) return elapsedSeconds.value;
       accumulatedElapsedSeconds.value = elapsedSeconds.value;
       sessionEndTime.value = new Date();
-      currentRunStartedAt.value = null;
-    } else if (isPaused.value) {
+    } else if (status.value === "paused") {
       elapsedSeconds.value = accumulatedElapsedSeconds.value;
-      sessionEndTime.value = pauseStartedAt.value
-        ? new Date(pauseStartedAt.value)
-        : new Date();
+      sessionEndTime.value = pauseStartedAt.value ?? new Date();
     }
 
-    const finalElapsed = elapsedSeconds.value;
-    stopTimerInterval();
-    return finalElapsed;
-  };
-
-  // 重新开始当前会话
-  const restartTimer = (formData: FocusFormData): void => {
-    const now = new Date();
-
-    stopTimerInterval();
-
-    sessionStartTime.value = now;
-    sessionEndTime.value = null;
+    currentRunStartedAt.value = null;
     pauseStartedAt.value = null;
-    currentRunStartedAt.value = now;
-    accumulatedElapsedSeconds.value = 0;
-    elapsedSeconds.value = 0;
-    isTimerRunning.value = true;
-    isPaused.value = false;
-
-    startTimerInterval();
-    saveState(formData);
-
-    console.log("重新开始专注计时:", now);
+    completionReason.value = "manual";
+    status.value = "completed";
+    completionNotificationSent.value = false;
+    stopTimerInterval();
+    await cancelFocusReminder();
+    saveState();
+    return elapsedSeconds.value;
   };
 
-  // 取消会话
-  const cancelSession = (): void => {
+  const restartTimer = async (
+    formData = sessionFormData.value ?? undefined,
+  ): Promise<void> => {
+    if (!formData) return;
+    const durationMinutes =
+      timerMode.value === "countdown"
+        ? targetDurationSeconds.value / 60
+        : undefined;
+    await cancelFocusReminder();
+    await startTimer(formData, {
+      mode: timerMode.value,
+      durationMinutes,
+    });
+  };
+
+  const forceCompleteCountdown = (): void => {
+    if (status.value !== "running" || timerMode.value !== "countdown") return;
+    elapsedSeconds.value = targetDurationSeconds.value;
+    finishCountdown();
+  };
+
+  const cancelSession = async (): Promise<void> => {
+    await cancelFocusReminder();
     clearState();
-    console.log("已取消专注会话");
   };
 
-  // 完成会话
   const completeSession = (): number => {
     const finalElapsed = elapsedSeconds.value;
     clearState();
     return finalElapsed;
   };
 
-  // 注意：不再使用 onUnmounted 清理计时器，以支持后台计时（路由切换时）
-
   return {
-    // 状态
+    status,
     isTimerRunning,
     isPaused,
+    isCompleted,
+    timerMode,
     elapsedSeconds,
+    displaySeconds,
+    targetDurationSeconds,
+    countdownProgress,
+    completionReason,
+    completionNotificationSent,
+    sessionFormData,
     sessionStartTime,
     sessionEndTime,
     pauseStartedAt,
-
-    // 方法
     startTimer,
     pauseTimer,
     resumeTimer,
     stopTimer,
     restartTimer,
+    forceCompleteCountdown,
     cancelSession,
     completeSession,
     restoreState,

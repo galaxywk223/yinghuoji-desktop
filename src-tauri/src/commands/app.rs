@@ -1,10 +1,13 @@
 use chrono::{Duration, Local, Utc};
 use rusqlite::params;
 use serde_json::json;
-use tauri::{AppHandle, Manager, State};
+use std::thread;
+use std::time::{Duration as StdDuration, SystemTime, UNIX_EPOCH};
+
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::models::{ProfileUpdatePayload, SettingItemPayload};
-use crate::{AppLifecycleState, AppResult, AppState};
+use crate::{restore_main_window, AppLifecycleState, AppResult, AppState};
 
 use super::common::{
     connection, dashboard_greeting, profile_json, recent_records_json, settings_json,
@@ -35,6 +38,47 @@ pub fn app_cancel_exit_for_update(
         "success": true,
         "message": "已恢复正常关闭拦截状态"
     }))
+}
+
+#[tauri::command]
+pub fn app_restore_main_window(app: AppHandle) -> AppResult<serde_json::Value> {
+    restore_main_window(&app);
+    Ok(json!({ "success": true }))
+}
+
+#[tauri::command]
+pub fn focus_reminder_schedule(
+    app: AppHandle,
+    lifecycle_state: State<'_, AppLifecycleState>,
+    deadline_millis: i64,
+) -> AppResult<serde_json::Value> {
+    let generation = lifecycle_state.next_focus_reminder_generation();
+    let now_millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64;
+    let wait_millis = deadline_millis.saturating_sub(now_millis).max(0) as u64;
+    let app_handle = app.clone();
+
+    thread::spawn(move || {
+        thread::sleep(StdDuration::from_millis(wait_millis));
+        let state = app_handle.state::<AppLifecycleState>();
+        if state.focus_reminder_generation() != generation {
+            return;
+        }
+        restore_main_window(&app_handle);
+        let _ = app_handle.emit("focus-countdown-completed", ());
+    });
+
+    Ok(json!({ "success": true, "generation": generation }))
+}
+
+#[tauri::command]
+pub fn focus_reminder_cancel(
+    lifecycle_state: State<'_, AppLifecycleState>,
+) -> AppResult<serde_json::Value> {
+    let generation = lifecycle_state.next_focus_reminder_generation();
+    Ok(json!({ "success": true, "generation": generation }))
 }
 
 #[tauri::command]

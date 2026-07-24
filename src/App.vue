@@ -11,22 +11,81 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onBeforeUnmount, onMounted, watch } from "vue";
 import zhCn from "element-plus/es/locale/lang/zh-cn";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/modules/auth";
 import { useSettingsStore } from "@/stores/modules/settings";
 import { useThemeStore } from "@/stores/modules/theme";
+import { useFocusTimer } from "@/composables/useFocusTimer";
+import { startFocusAlertLoop, stopFocusAlert } from "@/utils/focusAlert";
+import { ensureFocusCompletionNotification } from "@/utils/focusReminder";
 import { scheduleStartupUpdateCheck } from "@/utils/updater";
 
+const router = useRouter();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const themeStore = useThemeStore();
+const {
+  status: focusStatus,
+  completionReason,
+  sessionFormData,
+  targetDurationSeconds,
+  completionNotificationSent,
+  saveState: saveFocusState,
+  forceCompleteCountdown,
+  restoreState: restoreFocusState,
+} = useFocusTimer();
+let unlistenFocusCompletion: UnlistenFn | null = null;
 
-onMounted(() => {
+watch(
+  [focusStatus, completionReason],
+  async ([nextStatus, reason]) => {
+    if (nextStatus !== "completed" || reason !== "countdown") {
+      if (nextStatus !== "completed") stopFocusAlert();
+      return;
+    }
+
+    if (!completionNotificationSent.value) {
+      completionNotificationSent.value = await ensureFocusCompletionNotification(
+        sessionFormData.value?.name || "本次专注",
+        targetDurationSeconds.value / 60,
+      );
+      saveFocusState();
+    }
+    await startFocusAlertLoop();
+
+    if (isTauri()) {
+      await invoke("app_restore_main_window").catch((error) => {
+        console.error("恢复专注窗口失败", error);
+      });
+    }
+    if (router.currentRoute.value.path !== "/focus") {
+      await router.push("/focus");
+    }
+  },
+  { immediate: true },
+);
+
+onMounted(async () => {
   themeStore.initTheme();
   void authStore.checkAuth();
   void settingsStore.fetchSettings();
   scheduleStartupUpdateCheck();
+  restoreFocusState();
+
+  if (isTauri()) {
+    unlistenFocusCompletion = await listen("focus-countdown-completed", () => {
+      forceCompleteCountdown();
+    });
+  }
+});
+
+onBeforeUnmount(() => {
+  unlistenFocusCompletion?.();
+  stopFocusAlert();
 });
 </script>
 

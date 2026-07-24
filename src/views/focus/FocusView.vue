@@ -12,6 +12,11 @@
           <!-- 计时器显示 -->
           <FocusTimer
             :elapsed-seconds="elapsedSeconds"
+            :display-seconds="presentedDisplaySeconds"
+            :target-duration-seconds="presentedTargetDurationSeconds"
+            :countdown-progress="presentedCountdownProgress"
+            :timer-mode="presentedTimerMode"
+            :status="focusStatus"
             :is-active="isTimerRunning"
           />
 
@@ -19,6 +24,8 @@
           <FocusControls
             :is-running="isTimerRunning"
             :is-paused="isPaused"
+            :is-completed="isCompleted"
+            :timer-mode="presentedTimerMode"
             :loading="loading"
             @start="startTimer"
             @pause="pauseTimer"
@@ -27,6 +34,7 @@
             @restart="restartTimer"
             @cancel="cancelSession"
             @go-back="goBack"
+            @review="stopDialogVisible = true"
           />
         </div>
 
@@ -34,14 +42,14 @@
           <div class="focus-panel-head">
             <div>
               <p class="panel-eyebrow">本次记录</p>
-              <h3>{{ isTimerRunning || isPaused ? "专注信息" : "开始前确认内容" }}</h3>
+              <h3>{{ focusStatus === "idle" ? "开始前确认内容" : "专注信息" }}</h3>
             </div>
             <span class="stage-chip">{{ activeStageLabel }}</span>
           </div>
 
           <!-- 表单区域 -->
           <FocusForm
-            v-if="!isTimerRunning && !isPaused"
+            v-if="focusStatus === 'idle'"
             ref="formRef"
             v-model:form-data="focusForm"
             :categories="categories"
@@ -80,15 +88,25 @@
       <el-dialog
         v-model="stopDialogVisible"
         :show-close="false"
-        width="320px"
+        :close-on-click-modal="!isAutomaticCompletion"
+        :close-on-press-escape="!isAutomaticCompletion"
+        :width="isAutomaticCompletion ? '380px' : '320px'"
         class="ios-dialog-modal"
+        :class="{ 'completion-dialog-modal': isAutomaticCompletion }"
         align-center
         destroy-on-close
       >
         <div class="ios-dialog-content">
-          <div class="ios-dialog-header">
-            <h3 class="ios-dialog-title">保存学习记录</h3>
-            <p class="ios-dialog-subtitle">本次专注已结束</p>
+          <div class="ios-dialog-header" :class="{ completed: isAutomaticCompletion }">
+            <span v-if="isAutomaticCompletion" class="completion-icon" aria-hidden="true">
+              <Icon :icon="bellRingIcon" />
+            </span>
+            <h3 class="ios-dialog-title">
+              {{ isAutomaticCompletion ? "倒计时结束" : "保存学习记录" }}
+            </h3>
+            <p class="ios-dialog-subtitle">
+              {{ isAutomaticCompletion ? "本轮专注已完成，请处理本次记录" : "本次专注已结束" }}
+            </p>
           </div>
 
           <div class="ios-summary-card">
@@ -135,7 +153,33 @@
           </div>
 
           <div class="form-footer">
-            <div class="pill-btn-group-horizontal">
+            <div
+              v-if="isAutomaticCompletion"
+              class="completion-actions"
+            >
+              <button
+                class="pill-btn primary"
+                :disabled="loading"
+                @click="saveRecord"
+              >
+                保存记录
+              </button>
+              <button
+                class="pill-btn secondary"
+                :disabled="loading"
+                @click="restartCompletedCountdown"
+              >
+                重新开始
+              </button>
+              <button
+                class="completion-discard"
+                :disabled="loading"
+                @click="discardCompletedCountdown"
+              >
+                放弃记录
+              </button>
+            </div>
+            <div v-else class="pill-btn-group-horizontal">
               <button
                 class="pill-btn secondary"
                 @click="stopDialogVisible = false"
@@ -158,15 +202,22 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onActivated } from "vue";
+import { ref, computed, onMounted, onActivated, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { Icon } from "@iconify/vue";
+import bellRingIcon from "@iconify-icons/lucide/bell-ring";
 import { useCategoryStore } from "@/stores/category";
 import { useStageStore } from "@/stores/modules/stage";
 import { useSettingsStore } from "@/stores/modules/settings";
 import { recordApi } from "@/api/modules/records";
 import { useFocusTimer } from "@/composables/useFocusTimer";
 import { getFocusLogDate } from "@/utils/focusLearningDay";
+import {
+  primeFocusAlert,
+  startFocusAlertLoop,
+  stopFocusAlert,
+} from "@/utils/focusAlert";
 
 // 组件导入
 import FocusTimer from "@/components/business/focus/FocusTimer.vue";
@@ -182,9 +233,16 @@ const settingsStore = useSettingsStore();
 
 // 使用计时器 composable
 const {
+  status: focusStatus,
   isTimerRunning,
   isPaused,
+  isCompleted,
+  timerMode,
   elapsedSeconds,
+  displaySeconds,
+  targetDurationSeconds,
+  countdownProgress,
+  completionReason,
   sessionStartTime,
   sessionEndTime,
   startTimer: timerStart,
@@ -202,6 +260,8 @@ const focusForm = ref({
   name: "",
   categoryId: null,
   subcategoryId: null,
+  mode: "countup",
+  durationMinutes: 25,
 });
 
 // 结束弹窗数据
@@ -213,6 +273,35 @@ const stopForm = ref({
 
 const formRef = ref(null);
 const loading = ref(false);
+const isAutomaticCompletion = computed(
+  () => isCompleted.value && completionReason.value === "countdown",
+);
+const presentedTimerMode = computed(() =>
+  focusStatus.value === "idle" ? focusForm.value.mode : timerMode.value,
+);
+const presentedTargetDurationSeconds = computed(() =>
+  focusStatus.value === "idle" && presentedTimerMode.value === "countdown"
+    ? focusForm.value.durationMinutes * 60
+    : targetDurationSeconds.value,
+);
+const presentedDisplaySeconds = computed(() =>
+  focusStatus.value === "idle" && presentedTimerMode.value === "countdown"
+    ? presentedTargetDurationSeconds.value
+    : displaySeconds.value,
+);
+const presentedCountdownProgress = computed(() =>
+  focusStatus.value === "idle" && presentedTimerMode.value === "countdown"
+    ? 1
+    : countdownProgress.value,
+);
+
+watch(
+  isAutomaticCompletion,
+  (completed) => {
+    if (completed) stopDialogVisible.value = true;
+  },
+  { immediate: true },
+);
 
 // 分类和子分类数据
 const categories = computed(() => categoryStore.tree || []);
@@ -260,26 +349,6 @@ const formatDuration = (seconds) => {
   }
 };
 
-// 表单验证规则
-const rules = {
-  name: [
-    { required: true, message: "请输入记录名称", trigger: "blur" },
-    { min: 2, max: 50, message: "长度在 2 到 50 个字符", trigger: "blur" },
-  ],
-  categoryId: [{ required: true, message: "请选择分类", trigger: "change" }],
-  subcategoryId: [
-    { required: true, message: "请选择子分类", trigger: "change" },
-  ],
-};
-
-// 当前分类下可用的子分类
-const availableSubcategories = computed(() => {
-  if (!focusForm.value.categoryId) return [];
-  return allSubcategories.value.filter(
-    (sub) => sub.category_id === focusForm.value.categoryId,
-  );
-});
-
 const activeStageLabel = computed(
   () => stageStore.activeStage?.name || "未选择阶段",
 );
@@ -319,22 +388,33 @@ const onCategoryChange = () => {
 const startTimer = async () => {
   try {
     await formRef.value?.validate();
-    timerStart(focusForm.value);
-    ElMessage.success("开始专注！保持专注，加油！");
+    stopFocusAlert();
+    if (focusForm.value.mode === "countdown") {
+      await primeFocusAlert().catch(() => void 0);
+    }
+    await timerStart(focusForm.value, {
+      mode: focusForm.value.mode,
+      durationMinutes: focusForm.value.durationMinutes,
+    });
+    ElMessage.success(
+      focusForm.value.mode === "countdown"
+        ? `已开始 ${focusForm.value.durationMinutes} 分钟倒计时`
+        : "开始专注！保持专注，加油！",
+    );
   } catch (error) {
     console.error("表单验证失败:", error);
   }
 };
 
 // 暂停计时
-const pauseTimer = () => {
-  timerPause(focusForm.value);
+const pauseTimer = async () => {
+  await timerPause(focusForm.value);
   ElMessage.info("已暂停");
 };
 
 // 继续计时
-const resumeTimer = () => {
-  timerResume(focusForm.value);
+const resumeTimer = async () => {
+  await timerResume(focusForm.value);
   ElMessage.success("继续专注！");
 };
 
@@ -362,7 +442,8 @@ const restartTimer = async () => {
     );
 
     stopDialogVisible.value = false;
-    timerRestart(focusForm.value);
+    stopFocusAlert();
+    await timerRestart(focusForm.value);
     ElMessage.success("已重新开始专注");
   } catch (error) {
     // 用户取消操作
@@ -371,13 +452,14 @@ const restartTimer = async () => {
 };
 
 // 显示停止确认弹窗
-const showStopDialog = () => {
-  timerStop();
+const showStopDialog = async () => {
+  await timerStop();
   stopDialogVisible.value = true;
 };
 
 // 保存学习记录
 const saveRecord = async () => {
+  if (isAutomaticCompletion.value) stopFocusAlert();
   try {
     loading.value = true;
 
@@ -468,7 +550,8 @@ const cancelSession = async () => {
       },
     );
 
-    timerCancel();
+    stopFocusAlert();
+    await timerCancel();
 
     // 重置表单
     focusForm.value = {
@@ -476,6 +559,8 @@ const cancelSession = async () => {
       categoryId: null,
       subcategoryId: null,
       notes: "",
+      mode: "countup",
+      durationMinutes: 25,
     };
 
     ElMessage.info("已放弃专注记录");
@@ -483,6 +568,42 @@ const cancelSession = async () => {
     // 用户取消操作
     console.log("取消放弃");
   }
+};
+
+const discardCompletedCountdown = async () => {
+  try {
+    await ElMessageBox.confirm(
+      "确认放弃这次已完成的专注记录？数据将不会保存。",
+      "放弃记录",
+      {
+        confirmButtonText: "确认放弃",
+        cancelButtonText: "返回",
+        type: "warning",
+      },
+    );
+  } catch {
+    await startFocusAlertLoop();
+    return;
+  }
+
+  stopFocusAlert();
+  await timerCancel();
+  stopDialogVisible.value = false;
+  focusForm.value = {
+    name: "",
+    categoryId: null,
+    subcategoryId: null,
+    mode: "countup",
+    durationMinutes: 25,
+  };
+  ElMessage.info("已放弃专注记录");
+};
+
+const restartCompletedCountdown = async () => {
+  stopFocusAlert();
+  stopDialogVisible.value = false;
+  await timerRestart(focusForm.value);
+  ElMessage.success(`已重新开始 ${focusForm.value.durationMinutes} 分钟倒计时`);
 };
 
 // 返回
@@ -504,7 +625,7 @@ onMounted(async () => {
 onActivated(() => {
   // 每次进入页面时重置临时 UI 状态，并同步共享数据
   loading.value = false;
-  stopDialogVisible.value = false;
+  stopDialogVisible.value = isCompleted.value;
   void syncSharedData();
 });
 </script>
@@ -640,6 +761,7 @@ onActivated(() => {
 
 .focus-layout :deep(.focus-form .el-form) {
   padding: 16px;
+  gap: 12px;
   border-radius: var(--radius-md);
   box-shadow: none;
 }
@@ -705,6 +827,36 @@ onActivated(() => {
     font-size: 13px;
     color: var(--color-text-secondary);
     margin: 0;
+  }
+
+  &.completed {
+    width: 100%;
+    padding-top: 28px;
+    background: color-mix(in srgb, var(--color-success) 10%, var(--surface-card));
+    border-bottom: 1px solid color-mix(in srgb, var(--color-success) 25%, transparent);
+
+    .ios-dialog-title {
+      color: var(--color-success);
+      font-size: 20px;
+      font-weight: 800;
+    }
+  }
+}
+
+.completion-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  background: var(--color-success);
+  color: var(--color-text-inverse);
+
+  svg {
+    width: 24px;
+    height: 24px;
   }
 }
 
@@ -801,10 +953,39 @@ onActivated(() => {
 }
 
 .form-footer {
+  width: 100%;
   padding: 16px 24px 24px;
   background: var(--surface-card);
   border-top: 1px solid var(--stroke-soft);
   margin-top: auto;
+}
+
+.completion-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+
+  .pill-btn {
+    width: 100%;
+    min-height: 42px;
+  }
+}
+
+.completion-discard {
+  grid-column: 1 / -1;
+  border: 0;
+  background: transparent;
+  color: var(--color-error);
+  min-height: 36px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
 }
 
 @media (max-width: 768px) {
