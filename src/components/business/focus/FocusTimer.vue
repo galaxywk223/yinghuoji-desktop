@@ -16,7 +16,7 @@
           :cy="center"
           :r="outerRadius"
           fill="none"
-          stroke-width="10"
+          stroke-width="8"
         />
         <circle
           class="progress-ring-circle outer"
@@ -24,7 +24,7 @@
           :cy="center"
           :r="outerRadius"
           fill="none"
-          stroke-width="10"
+          stroke-width="8"
           :stroke-dasharray="outerCircumference"
           :stroke-dashoffset="outerProgressOffset"
         />
@@ -34,7 +34,7 @@
           :cy="center"
           :r="innerRadius"
           fill="none"
-          stroke-width="6"
+          stroke-width="5"
         />
         <circle
           class="progress-ring-circle inner"
@@ -42,13 +42,16 @@
           :cy="center"
           :r="innerRadius"
           fill="none"
-          stroke-width="6"
+          stroke-width="5"
           :stroke-dasharray="innerCircumference"
           :stroke-dashoffset="innerProgressOffset"
         />
       </svg>
       <div class="time-text" aria-live="polite">
-        <span v-if="status === 'completed' && timerMode === 'countdown'" class="complete-mark">
+        <span
+          v-if="status === 'completed' && timerMode === 'countdown'"
+          class="complete-mark"
+        >
           到时
         </span>
         <span class="time-value">{{ formattedTime }}</span>
@@ -62,7 +65,6 @@
 <script setup>
 import { computed } from "vue";
 
-// Props
 const props = defineProps({
   elapsedSeconds: {
     type: Number,
@@ -94,16 +96,15 @@ const props = defineProps({
   },
 });
 
-// 计算属性
-const ringSize = 300;
+const ringSize = 280;
 const center = ringSize / 2;
-const outerRadius = center - 14;
-const innerRadius = center - 34;
+const outerRadius = center - 12;
+const innerRadius = center - 28;
 const outerCircumference = 2 * Math.PI * outerRadius;
 const innerCircumference = 2 * Math.PI * innerRadius;
 
-const innerCycleSeconds = 60 * 60; // 内环：每 60 分钟一圈
-const outerCycleSeconds = 12 * 60 * 60; // 外环：每 12 小时一圈
+const innerCycleSeconds = 60 * 60;
+const outerCycleSeconds = 12 * 60 * 60;
 
 function calcCycleOffset(elapsed, cycle, circumference) {
   if (elapsed <= 0) {
@@ -154,13 +155,17 @@ const formattedTime = computed(() => {
 });
 
 const timeLabel = computed(() => {
-  return props.timerMode === "countdown" ? "剩余时间" : "时 : 分 : 秒";
+  return props.timerMode === "countdown" ? "剩余时间" : "已专注";
 });
 
 const progressHint = computed(() => {
   if (props.timerMode === "countdown") {
     if (props.status === "completed") return "本轮专注已完成";
-    return `共 ${Math.round(props.targetDurationSeconds / 60)} 分钟`;
+    const totalMinutes = Math.round(props.targetDurationSeconds / 60);
+    if (totalMinutes >= 60 && totalMinutes % 60 === 0) {
+      return `共 ${totalMinutes / 60} 小时`;
+    }
+    return `共 ${totalMinutes} 分钟`;
   }
   return "内环 1h · 外环 12h";
 });
@@ -173,11 +178,7 @@ const progressHint = computed(() => {
   align-items: center;
   margin: 0;
   position: relative;
-  min-height: 320px; /* Adjusted height */
-
-  &::before {
-    display: none;
-  }
+  min-height: 280px;
 
   .time-circle {
     position: relative;
@@ -192,11 +193,11 @@ const progressHint = computed(() => {
         transition: stroke 0.3s ease;
 
         &.outer {
-          stroke: var(--surface-soft);
+          stroke: var(--bg-muted);
         }
 
         &.inner {
-          stroke: var(--surface-card-strong);
+          stroke: color-mix(in srgb, var(--border-subtle) 80%, var(--bg-elevated));
         }
       }
 
@@ -205,14 +206,14 @@ const progressHint = computed(() => {
         transition: stroke 0.3s ease;
 
         &.outer {
-          stroke: var(--color-primary);
+          stroke: var(--brand-primary);
           transition:
             stroke-dashoffset 0.25s ease,
             stroke 0.3s ease;
         }
 
         &.inner {
-          stroke: var(--color-accent);
+          stroke: var(--brand-accent);
           transition:
             stroke-dashoffset 0.2s linear,
             stroke 0.3s ease;
@@ -230,41 +231,39 @@ const progressHint = computed(() => {
       padding: 0 6px;
 
       .time-value {
-        /* 预留圆环内安全边距，避免数字与内环重叠 */
-        font-size: clamp(1.75rem, 5.8vw, 2.45rem);
+        font-size: clamp(1.7rem, 5.2vw, 2.3rem);
         font-weight: 700;
-        color: var(--color-text-heading); /* Use theme variable */
-        letter-spacing: 0.03em;
-        font-family: "SFMono-Regular", "JetBrains Mono", monospace;
+        color: var(--text-primary);
+        letter-spacing: 0.02em;
+        font-family: "SFMono-Regular", "JetBrains Mono", "Consolas", monospace;
+        font-variant-numeric: tabular-nums;
         line-height: 1;
-        transition: color 0.3s ease, text-shadow 0.3s ease;
         max-width: 100%;
         text-align: center;
         white-space: nowrap;
-        margin-bottom: 0.25rem; /* Slight optical adjustment */
-
+        margin-bottom: 0.3rem;
       }
 
       .time-label {
-        font-size: 0.85rem;
-        color: var(--color-text-muted); /* Use theme variable */
-        margin-top: 0.5rem;
-        letter-spacing: 0.1em;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        margin-top: 0.35rem;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
-        transition: color 0.3s ease;
+        font-weight: 700;
       }
 
       .time-hint {
-        margin-top: 0.4rem;
-        font-size: 0.72rem;
-        color: var(--color-text-muted);
-        letter-spacing: 0.05em;
+        margin-top: 0.35rem;
+        font-size: 0.74rem;
+        color: var(--text-secondary);
+        letter-spacing: 0;
       }
 
       .complete-mark {
-        margin-bottom: 10px;
-        color: var(--color-success);
-        font-size: 0.85rem;
+        margin-bottom: 8px;
+        color: var(--status-success);
+        font-size: 0.82rem;
         font-weight: 800;
       }
     }
@@ -272,28 +271,28 @@ const progressHint = computed(() => {
 
   &.timer-active {
     .progress-ring-circle.outer {
-      stroke: var(--color-accent);
+      stroke: var(--brand-accent);
     }
 
     .progress-ring-circle.inner {
-      stroke: var(--color-primary-dark);
+      stroke: var(--brand-primary-strong);
     }
   }
 
   &.timer-countdown .progress-ring-circle {
     &.outer {
-      stroke: var(--color-primary);
+      stroke: var(--brand-primary);
     }
 
     &.inner {
-      stroke: var(--color-accent);
+      stroke: var(--brand-accent);
     }
   }
 
   &.timer-completed {
     .progress-ring-circle.outer,
     .progress-ring-circle.inner {
-      stroke: var(--color-success);
+      stroke: var(--status-success);
     }
 
     .time-circle {
@@ -308,7 +307,7 @@ const progressHint = computed(() => {
     transform: scale(1);
   }
   50% {
-    transform: scale(1.025);
+    transform: scale(1.02);
   }
 }
 

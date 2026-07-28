@@ -3,96 +3,95 @@
   <div class="focus-controls">
     <template v-if="!isRunning && !isPaused && !isCompleted">
       <div class="button-stack">
-        <el-button
-          class="control-btn primary-btn"
-          size="large"
-          :icon="VideoPlay"
-          :loading="loading"
+        <button
+          type="button"
+          class="control-btn primary"
+          :disabled="loading"
           @click="$emit('start')"
         >
-          {{ timerMode === "countdown" ? "开始倒计时" : "专注计时" }}
-        </el-button>
-        <button class="return-link" @click="$emit('go-back')">返回</button>
+          <el-icon><VideoPlay /></el-icon>
+          <span>{{ timerMode === "countdown" ? "开始倒计时" : "开始专注" }}</span>
+        </button>
+        <button type="button" class="return-link" @click="$emit('go-back')">
+          返回
+        </button>
       </div>
     </template>
 
     <template v-else-if="isCompleted">
       <div class="button-stack">
-        <el-button
-          class="control-btn primary-btn"
-          size="large"
+        <button
+          type="button"
+          class="control-btn primary"
           @click="$emit('review')"
         >
           处理本次记录
-        </el-button>
+        </button>
       </div>
     </template>
 
     <template v-else-if="isRunning">
       <div class="button-stack">
-        <el-button
-          class="control-btn pause-btn"
-          size="large"
-          :icon="VideoPause"
+        <button
+          type="button"
+          class="control-btn warning"
           @click="$emit('pause')"
         >
-          暂停
-        </el-button>
-        <el-button
-          class="control-btn stop-btn"
-          size="large"
-          :icon="VideoPlay"
+          <el-icon><VideoPause /></el-icon>
+          <span>暂停</span>
+        </button>
+        <button
+          type="button"
+          class="control-btn danger"
           @click="$emit('stop')"
         >
           结束专注
-        </el-button>
-        <el-button
-          class="control-btn restart-btn"
-          size="large"
-          :icon="RefreshRight"
-          plain
+        </button>
+        <button
+          type="button"
+          class="control-btn secondary"
           @click="$emit('restart')"
         >
-          重新开始
-        </el-button>
+          <el-icon><RefreshRight /></el-icon>
+          <span>重新开始</span>
+        </button>
       </div>
     </template>
 
     <template v-else-if="isPaused">
       <div class="button-stack">
-        <el-button
-          class="control-btn resume-btn"
-          size="large"
-          :icon="VideoPlay"
+        <button
+          type="button"
+          class="control-btn primary"
           @click="$emit('resume')"
         >
-          继续
-        </el-button>
-        <el-button
-          class="control-btn stop-btn"
-          size="large"
-          :icon="VideoPlay"
+          <el-icon><VideoPlay /></el-icon>
+          <span>继续</span>
+        </button>
+        <button
+          type="button"
+          class="control-btn danger"
           @click="$emit('stop')"
         >
           结束专注
-        </el-button>
-        <el-button
-          class="control-btn restart-btn"
-          size="large"
-          :icon="RefreshRight"
-          plain
-          @click="$emit('restart')"
-        >
-          重新开始
-        </el-button>
-        <el-button
-          class="control-btn cancel-btn"
-          size="large"
-          plain
-          @click="$emit('cancel')"
-        >
-          放弃记录
-        </el-button>
+        </button>
+        <div class="button-row">
+          <button
+            type="button"
+            class="control-btn secondary compact"
+            @click="$emit('restart')"
+          >
+            <el-icon><RefreshRight /></el-icon>
+            <span>重新开始</span>
+          </button>
+          <button
+            type="button"
+            class="control-btn ghost-danger compact"
+            @click="$emit('cancel')"
+          >
+            放弃记录
+          </button>
+        </div>
       </div>
     </template>
   </div>
@@ -101,7 +100,6 @@
 <script setup>
 import { RefreshRight, VideoPlay, VideoPause } from "@element-plus/icons-vue";
 
-// Props
 defineProps({
   isRunning: {
     type: Boolean,
@@ -125,7 +123,6 @@ defineProps({
   },
 });
 
-// Emits
 defineEmits([
   "start",
   "pause",
@@ -143,134 +140,106 @@ defineEmits([
   width: 100%;
   display: flex;
   justify-content: center;
-  margin-top: 1.5rem;
+  margin-top: 4px;
 }
 
 .button-stack {
   width: 100%;
-  max-width: 360px;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  align-items: center;
+  gap: 8px;
+  align-items: stretch;
 }
 
-:deep(.control-btn) {
-  width: 100%;
-  height: 56px; /* iOS Large Button Height */
-  font-size: 19px; /* Larger text */
-  font-weight: 600;
-  border-radius: 999px; /* Pill shape */
-  border: none;
-  box-shadow: var(--box-shadow-card);
-  padding: 0 1.2rem;
-  transition:
-    transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1),
-    box-shadow 0.2s ease;
-  margin-left: 0 !important;
-  letter-spacing: 0.5px;
+.button-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
 
-  .el-button__content {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-  }
+.control-btn {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    filter var(--motion-fast) var(--motion-ease);
 
   .el-icon {
-    font-size: 22px;
+    font-size: 16px;
   }
 
-  &:hover {
-    transform: scale(1.02);
-    box-shadow: var(--box-shadow-hover);
+  &:disabled {
+    opacity: 0.56;
+    cursor: not-allowed;
   }
 
-  &:active {
-    transform: scale(0.96);
+  &:not(:disabled):hover {
+    filter: brightness(0.98);
   }
-}
 
-/* 清除 Element Plus 相邻按钮默认左间距 */
-:deep(.button-stack .el-button + .el-button) {
-  margin-left: 0 !important;
-}
-
-:deep(.primary-btn),
-:deep(.resume-btn) {
-  background: linear-gradient(
-    135deg,
-    var(--color-primary) 0%,
-    var(--color-primary-dark) 100%
-  );
-  color: var(--color-text-inverse);
-  box-shadow: var(--box-shadow-card);
-
-  &:hover {
-    background: linear-gradient(
-      135deg,
-      var(--color-primary-dark) 0%,
-      var(--color-primary) 100%
-    );
-    box-shadow: var(--box-shadow-hover);
+  &.compact {
+    min-height: 38px;
+    font-size: 0.86rem;
   }
-}
 
-:deep(.pause-btn) {
-  background: linear-gradient(
-    135deg,
-    var(--color-warning) 0%,
-    var(--color-accent) 100%
-  );
-  color: var(--color-text-inverse);
-  box-shadow: var(--box-shadow-card);
-
-  &:hover {
-    box-shadow: var(--box-shadow-hover);
+  &.primary {
+    background: var(--brand-primary);
+    color: var(--text-inverse);
   }
-}
 
-:deep(.stop-btn) {
-  background: linear-gradient(
-    135deg,
-    var(--color-error) 0%,
-    var(--color-error) 100%
-  );
-  color: var(--color-text-inverse);
-  box-shadow: var(--box-shadow-card);
-
-  &:hover {
-    box-shadow: var(--box-shadow-hover);
+  &.warning {
+    background: color-mix(in srgb, var(--status-warning) 16%, var(--bg-elevated));
+    color: var(--status-warning);
+    border-color: color-mix(in srgb, var(--status-warning) 22%, var(--border-subtle));
   }
-}
 
-:deep(.secondary-btn),
-:deep(.restart-btn),
-:deep(.cancel-btn) {
-  background: var(--surface-card-muted);
-  color: var(--color-text-heading);
-  box-shadow: none;
+  &.danger {
+    background: color-mix(in srgb, var(--status-error) 14%, var(--bg-elevated));
+    color: var(--status-error);
+    border-color: color-mix(in srgb, var(--status-error) 20%, var(--border-subtle));
+  }
 
-  &:hover {
-    background: var(--surface-soft);
+  &.secondary {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+  }
+
+  &.ghost-danger {
+    background: transparent;
+    color: var(--status-error);
+    border-color: color-mix(in srgb, var(--status-error) 18%, var(--border-subtle));
   }
 }
 
 .return-link {
+  align-self: center;
   background: transparent;
   border: none;
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  font-size: 17px;
+  color: var(--text-secondary);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.88rem;
   cursor: pointer;
-  text-decoration: none;
-  padding: 8px 16px;
-  transition: color 0.2s ease;
-  margin-top: 4px;
+  padding: 6px 12px;
+  transition: color var(--motion-fast) var(--motion-ease);
 
   &:hover {
-    color: var(--color-text-heading);
+    color: var(--text-primary);
   }
 }
 

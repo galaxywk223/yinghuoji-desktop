@@ -6,7 +6,7 @@ import {
 } from "@/utils/focusReminder";
 
 const FOCUS_STATE_KEY = "focus_session_state";
-const DEFAULT_COUNTDOWN_MINUTES = 25;
+const DEFAULT_COUNTDOWN_MINUTES = 30;
 
 export type FocusSessionStatus = "idle" | "running" | "paused" | "completed";
 export type FocusCompletionReason = "manual" | "countdown" | null;

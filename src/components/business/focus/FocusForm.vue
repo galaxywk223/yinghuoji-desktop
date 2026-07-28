@@ -39,11 +39,11 @@
               :class="{ active: localForm.durationMinutes === minutes }"
               @click="localForm.durationMinutes = minutes"
             >
-              {{ minutes }} 分钟
+              {{ formatPresetLabel(minutes) }}
             </button>
           </div>
           <div class="custom-duration">
-            <span>自定义</span>
+            <span class="custom-duration__label">自定义</span>
             <el-input-number
               v-model="localForm.durationMinutes"
               :min="1"
@@ -52,14 +52,14 @@
               controls-position="right"
               aria-label="自定义倒计时分钟数"
             />
-            <span>分钟</span>
+            <span class="custom-duration__unit">分钟</span>
           </div>
         </div>
       </el-form-item>
 
       <el-form-item label="记录名称" prop="name">
         <template #label>
-           <span class="required-star">*</span> 记录名称
+          <span class="required-star">*</span> 记录名称
         </template>
         <el-input
           v-model="localForm.name"
@@ -73,7 +73,7 @@
       <div class="category-row">
         <el-form-item label="分类" prop="categoryId" class="category-item">
           <template #label>
-             <span class="required-star">*</span> 分类
+            <span class="required-star">*</span> 分类
           </template>
           <el-select
             v-model="localForm.categoryId"
@@ -122,10 +122,8 @@
 <script setup>
 import { computed, watch, ref, nextTick, reactive } from "vue";
 
-// Refs
 const formRef = ref(null);
 
-// Props
 const props = defineProps({
   formData: {
     type: Object,
@@ -141,7 +139,6 @@ const props = defineProps({
   },
 });
 
-// Emits
 const emit = defineEmits(["update:formData", "category-change"]);
 
 const localForm = reactive({
@@ -149,10 +146,18 @@ const localForm = reactive({
   categoryId: null,
   subcategoryId: null,
   mode: "countup",
-  durationMinutes: 25,
+  durationMinutes: 30,
 });
-const durationPresets = [25, 45, 60];
+
+const durationPresets = [30, 45, 60, 90, 120, 150, 180, 240];
 const syncing = ref(false);
+
+const formatPresetLabel = (minutes) => {
+  if (minutes >= 60 && minutes % 60 === 0) {
+    return `${minutes / 60} 小时`;
+  }
+  return `${minutes} 分`;
+};
 
 watch(
   () => props.formData,
@@ -178,10 +183,9 @@ watch(
     if (syncing.value) return;
     emit("update:formData", { ...localForm });
   },
-  { deep: true }
+  { deep: true },
 );
 
-// 表单验证规则
 const rules = {
   name: [
     { required: true, message: "请输入记录名称", trigger: "blur" },
@@ -202,7 +206,6 @@ const rules = {
   ],
 };
 
-// 可用的子分类
 const availableSubcategories = computed(() => {
   if (!localForm.categoryId) return [];
   return props.subcategories.filter(
@@ -210,14 +213,11 @@ const availableSubcategories = computed(() => {
   );
 });
 
-// 分类变化时的处理
 const onCategoryChange = () => {
-  // 清空子分类选择，仅通知父组件分类已变更
   localForm.subcategoryId = null;
   emit("category-change", localForm.categoryId);
 };
 
-// 暴露验证方法给父组件
 defineExpose({
   validate: () => formRef.value?.validate(),
 });
@@ -227,6 +227,28 @@ defineExpose({
 .focus-form {
   width: 100%;
   margin: 0;
+
+  :deep(.el-form) {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+
+  :deep(.el-form-item) {
+    margin-bottom: 0;
+  }
+
+  :deep(.el-form-item__label) {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding-bottom: 6px;
+    line-height: 1.2;
+  }
 
   .timer-mode-control {
     width: 100%;
@@ -238,18 +260,22 @@ defineExpose({
     border: 1px solid var(--border-subtle);
 
     button {
-      min-height: 38px;
+      min-height: 36px;
       border: 0;
-      border-radius: calc(var(--radius-md) - 3px);
+      border-radius: calc(var(--radius-md) - 2px);
       background: transparent;
       color: var(--text-secondary);
       font: inherit;
+      font-size: 0.9rem;
       font-weight: 700;
       cursor: pointer;
+      transition:
+        background-color var(--motion-fast) var(--motion-ease),
+        color var(--motion-fast) var(--motion-ease);
 
       &.active {
         background: var(--bg-surface);
-        color: var(--color-primary);
+        color: var(--brand-primary);
         box-shadow: var(--shadow-1);
       }
     }
@@ -259,28 +285,39 @@ defineExpose({
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
 
   .duration-presets {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
 
     button {
-      min-height: 38px;
+      min-height: 36px;
+      padding: 0 6px;
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
       background: var(--bg-surface);
       color: var(--text-secondary);
       font: inherit;
+      font-size: 0.84rem;
       font-weight: 650;
       cursor: pointer;
+      transition:
+        border-color var(--motion-fast) var(--motion-ease),
+        background-color var(--motion-fast) var(--motion-ease),
+        color var(--motion-fast) var(--motion-ease);
 
       &.active {
-        border-color: var(--color-primary);
-        background: var(--color-primary-light);
-        color: var(--color-primary-dark);
+        border-color: color-mix(in srgb, var(--brand-primary) 45%, var(--border-subtle));
+        background: color-mix(in srgb, var(--brand-primary) 12%, var(--bg-surface));
+        color: var(--brand-primary-strong);
+      }
+
+      &:hover:not(.active) {
+        border-color: var(--border-strong);
+        color: var(--text-primary);
       }
     }
   }
@@ -289,30 +326,34 @@ defineExpose({
     display: flex;
     align-items: center;
     gap: 10px;
+    min-height: 40px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--bg-muted);
     color: var(--text-secondary);
-    font-size: 0.9rem;
+    font-size: 0.88rem;
+
+    &__label {
+      flex-shrink: 0;
+      font-weight: 650;
+      color: var(--text-muted);
+    }
+
+    &__unit {
+      flex-shrink: 0;
+      color: var(--text-secondary);
+    }
 
     :deep(.el-input-number) {
-      width: 132px;
+      width: 128px;
     }
-  }
-
-  :deep(.el-form) {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    padding: 2rem;
-    border-radius: var(--border-radius-lg);
-    background: var(--surface-card);
-    border: 1px solid var(--color-border-card);
-    box-shadow: var(--box-shadow-card);
-    transition: all 0.3s ease;
   }
 
   .category-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.5rem;
+    gap: 12px;
 
     @media (max-width: 768px) {
       grid-template-columns: 1fr;
@@ -321,81 +362,60 @@ defineExpose({
 
   .category-item {
     margin-bottom: 0;
-
-    :deep(.el-input__wrapper) {
-      background: var(--surface-page) !important;
-      border-color: var(--color-border-input);
-
-      .el-input__inner { color: var(--color-text-base); }
-      .el-input__suffix { color: var(--color-text-secondary); }
-    }
   }
-  
+
   .required-star {
-      color: var(--color-error);
-      margin-right: 4px;
-      font-weight: bold;
-  }
-
-  :deep(.el-form-item) {
-    margin-bottom: 0;
-  }
-
-  :deep(.el-form-item__label) {
-    color: var(--color-text-heading);
+    color: var(--status-error);
+    margin-right: 2px;
     font-weight: 700;
-    font-size: 0.95rem;
-    padding-bottom: 0.5rem;
-    line-height: 1.2;
   }
 
-  /* Input Styles */
   :deep(.el-input__wrapper),
   :deep(.el-select .el-input__wrapper) {
-    background: var(--surface-page) !important;
-    border: 1px solid var(--color-border-input);
-    border-radius: var(--border-radius-md);
+    background: var(--bg-muted) !important;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
     box-shadow: none !important;
-    padding: 8px 12px;
-    min-height: 42px;
-    transition: all 0.2s ease;
+    padding: 4px 12px;
+    min-height: 40px;
+    transition:
+      border-color var(--motion-fast) var(--motion-ease),
+      box-shadow var(--motion-fast) var(--motion-ease);
 
     &:hover {
-      border-color: var(--color-border-hover);
+      border-color: var(--border-strong);
     }
 
     &.is-focus {
-      border-color: var(--color-primary);
-      box-shadow: 0 0 0 1px var(--color-primary) !important;
-    }
-  }
-  
-  /* Text colors */
-  :deep(.el-input__inner) {
-    color: var(--color-text-base);
-    font-size: 0.95rem;
-    
-    &::placeholder {
-      color: var(--color-text-muted);
+      border-color: var(--brand-primary);
+      box-shadow: var(--focus-ring) !important;
     }
   }
 
-  /* Keep disabled select consistent with themed form surface */
+  :deep(.el-input__inner) {
+    color: var(--text-primary);
+    font-size: 0.92rem;
+
+    &::placeholder {
+      color: var(--text-muted);
+    }
+  }
+
   :deep(.subcategory-select) {
-    --el-fill-color-light: var(--surface-page);
-    --el-fill-color-blank: var(--surface-page);
-    --el-select-disabled-border: var(--color-border-input);
-    --el-disabled-border-color: var(--color-border-input);
-    --el-disabled-bg-color: var(--surface-page);
-    --el-disabled-text-color: var(--color-text-muted);
+    --el-fill-color-light: var(--bg-muted);
+    --el-fill-color-blank: var(--bg-muted);
+    --el-select-disabled-border: var(--border-subtle);
+    --el-disabled-border-color: var(--border-subtle);
+    --el-disabled-bg-color: var(--bg-muted);
+    --el-disabled-text-color: var(--text-muted);
   }
 
   :deep(.subcategory-select .el-input.is-disabled .el-input__wrapper),
   :deep(.subcategory-select .el-input__wrapper.is-disabled),
   :deep(.subcategory-select .el-select__wrapper.is-disabled) {
-    background: var(--surface-page) !important;
-    border-color: var(--color-border-input) !important;
-    box-shadow: 0 0 0 1px var(--color-border-input) inset !important;
+    background: var(--bg-muted) !important;
+    border-color: var(--border-subtle) !important;
+    box-shadow: none !important;
     cursor: not-allowed;
     opacity: 0.72;
   }
@@ -404,25 +424,19 @@ defineExpose({
   :deep(.subcategory-select .el-input__inner:disabled),
   :deep(.subcategory-select .el-select__wrapper.is-disabled .el-select__selected-item),
   :deep(.subcategory-select .el-select__wrapper.is-disabled .el-select__placeholder) {
-    -webkit-text-fill-color: var(--color-text-muted) !important;
-    color: var(--color-text-muted) !important;
-  }
-
-  :deep(.subcategory-select .el-input.is-disabled .el-input__inner::placeholder),
-  :deep(.subcategory-select .el-input__inner:disabled::placeholder),
-  :deep(.subcategory-select .el-select__wrapper.is-disabled .el-select__placeholder.is-transparent) {
-    color: var(--color-text-muted) !important;
+    -webkit-text-fill-color: var(--text-muted) !important;
+    color: var(--text-muted) !important;
   }
 
   :deep(.subcategory-select .el-select__caret),
   :deep(.subcategory-select .el-select__wrapper.is-disabled .el-select__caret) {
-    color: var(--color-text-muted) !important;
+    color: var(--text-muted) !important;
   }
 
   :deep(.el-input__count) {
     background: transparent;
-    color: var(--color-text-muted);
-    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
   }
 }
 </style>

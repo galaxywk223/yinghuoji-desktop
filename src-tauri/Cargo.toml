@@ -1,6 +1,6 @@
 [package]
 name = "yinghuoji_desktop"
-version = "3.2.0"
+version = "3.2.1"
 description = "萤火集"
 authors = ["OpenAI Codex"]
 edition = "2021"

@@ -17,15 +17,17 @@
     <div class="info-item">
       <span class="info-label">分类</span>
       <span class="info-value">
-        <span :style="{ color: currentCategory?.color }">● </span>
-        {{ currentCategory?.name }}
+        <span
+          v-if="currentCategory?.color"
+          class="category-dot"
+          :style="{ background: currentCategory.color }"
+        />
+        {{ currentCategory?.name || "—" }}
       </span>
     </div>
     <div v-if="currentSubcategory" class="info-item">
       <span class="info-label">子分类</span>
-      <span class="info-value">
-        <el-tag size="small">{{ currentSubcategory.name }}</el-tag>
-      </span>
+      <span class="info-value">{{ currentSubcategory.name }}</span>
     </div>
     <div v-if="formData.notes" class="info-item">
       <span class="info-label">备注</span>
@@ -37,7 +39,6 @@
 <script setup>
 import { computed } from "vue";
 
-// Props
 const props = defineProps({
   formData: {
     type: Object,
@@ -53,7 +54,6 @@ const props = defineProps({
   },
 });
 
-// 计算属性
 const currentCategory = computed(() => {
   return props.categories.find((cat) => cat.id === props.formData.categoryId);
 });
@@ -67,45 +67,55 @@ const currentSubcategory = computed(() => {
 
 <style scoped lang="scss">
 .focus-info {
-  max-width: 100%;
-  margin-top: 1.5rem;
-  padding: 1.75rem;
-  border-radius: 18px;
-  background: var(--surface-card);
-  border: 1px solid var(--stroke-soft);
-  box-shadow: var(--box-shadow-card);
+  width: 100%;
+  margin: 0;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
 
-  .info-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.9rem 0;
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 2px;
 
-    &:not(:last-child) {
-      border-bottom: 1px solid var(--stroke-soft);
-    }
-
-    .info-label {
-      font-weight: 600;
-      color: var(--color-text-secondary);
-      font-size: 0.95rem;
-      letter-spacing: 0.01em;
-    }
-
-    .info-value {
-      flex: 1;
-      text-align: right;
-      color: var(--color-text-heading);
-      font-size: 1rem;
-      font-weight: 500;
-
-      :deep(.el-tag) {
-        margin-left: 0.6rem;
-        background: var(--color-primary-light);
-        border-color: var(--stroke-soft);
-        color: var(--color-primary-dark);
-      }
-    }
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--border-subtle);
   }
+}
+
+.info-label {
+  flex-shrink: 0;
+  font-weight: 650;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.info-value {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.category-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 </style>

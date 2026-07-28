@@ -64,24 +64,6 @@
             :categories="categories"
             :subcategories="allSubcategories"
           />
-
-          <div class="focus-support-grid">
-            <section class="support-card">
-              <span class="support-label">阶段</span>
-              <strong>{{ activeStageLabel }}</strong>
-              <p>本次记录会归入当前激活阶段。</p>
-            </section>
-            <section class="support-card">
-              <span class="support-label">分类</span>
-              <strong>{{ categories.length }}</strong>
-              <p>个主分类可用于整理学习方向。</p>
-            </section>
-            <section class="support-card">
-              <span class="support-label">子分类</span>
-              <strong>{{ allSubcategories.length }}</strong>
-              <p>选择子分类后，统计图表会自动归类。</p>
-            </section>
-          </div>
         </div>
       </div>
       <!-- 结束专注弹窗 -->
@@ -261,7 +243,7 @@ const focusForm = ref({
   categoryId: null,
   subcategoryId: null,
   mode: "countup",
-  durationMinutes: 25,
+  durationMinutes: 30,
 });
 
 // 结束弹窗数据
@@ -368,10 +350,7 @@ const syncSharedData = async () => {
 // 加载数据
 const loadData = async () => {
   try {
-    console.log("开始加载数据...");
     const ready = await syncSharedData();
-    console.log("当前激活阶段:", stageStore.activeStage);
-    console.log("categoryStore.tree:", categoryStore.tree);
     if (!ready) return;
   } catch (error) {
     console.error("加载数据失败:", error);
@@ -445,9 +424,8 @@ const restartTimer = async () => {
     stopFocusAlert();
     await timerRestart(focusForm.value);
     ElMessage.success("已重新开始专注");
-  } catch (error) {
+  } catch {
     // 用户取消操作
-    console.log("取消重新开始");
   }
 };
 
@@ -492,12 +470,8 @@ const saveRecord = async () => {
       notes: stopForm.value.notes || "",
     };
 
-    console.log("准备保存记录，数据:", recordData);
+    await recordApi.createRecord(recordData);
 
-    const response = await recordApi.createRecord(recordData);
-    console.log("保存成功，响应:", response);
-
-    // 关闭弹窗并重置状态
     stopDialogVisible.value = false;
     stopForm.value = {
       mood: 3,
@@ -507,28 +481,20 @@ const saveRecord = async () => {
 
     ElMessage.success("专注记录已保存！");
 
-    loading.value = false; // 确保重置加载状态
+    loading.value = false;
     setTimeout(() => {
       router.push("/records");
     }, 1500);
   } catch (error) {
-    console.error("保存记录失败，完整错误:", error);
-    console.error("错误详情:", {
-      message: error.message,
-      response: error.response,
-      request: error.request,
-    });
+    console.error("保存记录失败:", error);
 
     let errorMessage = "保存记录失败";
     if (error.response) {
-      // 服务器返回了错误响应
       errorMessage =
         error.response.data?.message || `服务器错误: ${error.response.status}`;
     } else if (error.request) {
-      // 请求已发出但没有收到响应
       errorMessage = "网络连接失败，请检查网络或后端服务";
     } else {
-      // 请求配置错误
       errorMessage = error.message || "未知错误";
     }
 
@@ -560,13 +526,12 @@ const cancelSession = async () => {
       subcategoryId: null,
       notes: "",
       mode: "countup",
-      durationMinutes: 25,
+      durationMinutes: 30,
     };
 
     ElMessage.info("已放弃专注记录");
-  } catch (error) {
+  } catch {
     // 用户取消操作
-    console.log("取消放弃");
   }
 };
 
@@ -594,7 +559,7 @@ const discardCompletedCountdown = async () => {
     categoryId: null,
     subcategoryId: null,
     mode: "countup",
-    durationMinutes: 25,
+    durationMinutes: 30,
   };
   ElMessage.info("已放弃专注记录");
 };
@@ -642,32 +607,29 @@ onActivated(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
-  margin-top: 8px;
+  margin-top: 4px;
 
   &__timer {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 12px;
     align-items: center;
-    min-height: max(520px, calc(100vh - var(--topbar-height) - 178px));
-    padding: 24px;
+    padding: 20px 18px 16px;
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-subtle);
     background: var(--bg-surface);
     box-shadow: var(--shadow-1);
-    justify-content: center;
   }
 
   &__details {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
     width: 100%;
-    min-height: max(520px, calc(100vh - var(--topbar-height) - 178px));
-    padding: 16px;
+    padding: 16px 18px 18px;
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-subtle);
     background: var(--bg-surface);
@@ -679,110 +641,51 @@ onActivated(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 2px 4px 8px;
+  gap: 12px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .panel-eyebrow {
   margin: 0 0 4px;
   color: var(--text-muted);
   font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .focus-panel-head h3 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 1.08rem;
-  line-height: 1.25;
+  font-size: 1.02rem;
+  line-height: 1.3;
+  font-weight: 700;
 }
 
 .stage-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  max-width: 240px;
+  min-height: 28px;
+  max-width: 220px;
   padding: 0 10px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: var(--bg-muted);
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.focus-support-grid {
-  margin-top: auto;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.support-card {
-  min-width: 0;
-  padding: 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-muted);
-}
-
-.support-label {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.support-card strong {
-  display: block;
-  color: var(--text-primary);
-  font-size: 1.18rem;
-  line-height: 1.2;
-  margin-bottom: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.support-card p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-  line-height: 1.55;
-}
-
-.focus-layout :deep(.focus-form .el-form) {
-  padding: 16px;
-  gap: 12px;
-  border-radius: var(--radius-md);
-  box-shadow: none;
-}
-
 .focus-layout :deep(.focus-controls) {
-  margin-top: 0.5rem;
-}
-
-.focus-layout :deep(.control-btn) {
-  height: 44px;
-  border-radius: var(--radius-md);
-  font-size: 0.95rem;
+  margin-top: 0;
 }
 
 .focus-layout :deep(.button-stack) {
   max-width: 100%;
-  gap: 0.75rem;
-}
-
-.focus-layout :deep(.timer-display) {
-  min-height: 330px;
 }
 
 /* iOS Dialog Styles */
@@ -988,17 +891,8 @@ onActivated(() => {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 960px) {
   .focus-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .focus-layout__timer,
-  .focus-layout__details {
-    min-height: 0;
-  }
-
-  .focus-support-grid {
     grid-template-columns: 1fr;
   }
 }
